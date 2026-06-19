@@ -13,19 +13,19 @@ frontend_build = os.path.abspath(
 
 app = Flask(__name__, static_folder=frontend_build, static_url_path="/")
 
-# ── CORS — allow the current origin and any ALLOWED_ORIGINS env var ────────
-_raw_origins = os.getenv(
-    "ALLOWED_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000"
-)
-_allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+# ── CORS — allow all origins when running locally (tunnel support) ─────────
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
 
-# On Render, the service URL is also an allowed origin automatically
-_render_url = os.getenv("RENDER_EXTERNAL_URL", "")
-if _render_url and _render_url not in _allowed_origins:
-    _allowed_origins.append(_render_url)
-
-CORS(app, origins=_allowed_origins, supports_credentials=True)
+# If wildcard or not set, allow all (needed for Cloudflare tunnel URLs)
+if _raw_origins.strip() == "*" or not _raw_origins.strip():
+    CORS(app, origins="*", supports_credentials=False)
+else:
+    _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+    # Also allow Render service URL automatically
+    _render_url = os.getenv("RENDER_EXTERNAL_URL", "")
+    if _render_url and _render_url not in _allowed_origins:
+        _allowed_origins.append(_render_url)
+    CORS(app, origins=_allowed_origins, supports_credentials=True)
 
 cache = Cache(app, config={
     "CACHE_TYPE":            "SimpleCache",

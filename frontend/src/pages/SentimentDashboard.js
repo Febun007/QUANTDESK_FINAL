@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { GlassPanel, Spinner, API, ML_API } from "../components/SharedComponents";
+import { GlassPanel, Spinner, API, ML_API, apiFetch } from "../components/SharedComponents";
 
 /* ── Fear & Greed Gauge (SVG) ────────────────────────────────────── */
 function FearGreedGauge({ value = 50, label = "Neutral" }) {
@@ -95,9 +95,9 @@ export default function SentimentDashboard({ dark }) {
     setLoading(true);
     try {
       const [vixHistRes, vixInfoRes, newsRes] = await Promise.all([
-        fetch(`${API}/history/^VIX?days=90`).then(r => r.json()).catch(() => []),
-        fetch(`${API}/stocks?symbols=^VIX`).then(r => r.json()).catch(() => []),
-        fetch(`${ML_API}/news`).then(r => r.json()).catch(() => ({ articles: [] })),
+        apiFetch(`${API}/history/^VIX?days=90`).then(r => r.json()).catch(() => []),
+        apiFetch(`${API}/stocks?symbols=^VIX`).then(r => r.json()).catch(() => []),
+        apiFetch(`${ML_API}/news`).then(r => r.json()).catch(() => ({ articles: [] })),
       ]);
       setVixData(Array.isArray(vixHistRes) ? vixHistRes : []);
       const vixStock = Array.isArray(vixInfoRes) ? vixInfoRes.find(s => s.symbol === "^VIX") : null;

@@ -4,6 +4,7 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, ReferenceLine, Cell
 } from "recharts";
+import { apiFetch } from "./components/SharedComponents";
 
 const ML_API = "/api";
 
@@ -131,7 +132,7 @@ export default function ModelAccuracy({ onClose }) {
         }
 
         /* Fetch fresh data */
-        fetch(`${ML_API}/backtest`)
+        apiFetch(`${ML_API}/backtest`)
             .then(r => { if (!r.ok) throw new Error(`Server error ${r.status}`); return r.json(); })
             .then(d => {
                 _cachedBacktest = d;
@@ -176,7 +177,7 @@ export default function ModelAccuracy({ onClose }) {
         setLoading(true);
         setError(null);
         setIsStale(false);
-        fetch(`${ML_API}/backtest`)
+        apiFetch(`${ML_API}/backtest`)
             .then(r => { if (!r.ok) throw new Error(`Server error ${r.status}`); return r.json(); })
             .then(d => {
                 _cachedBacktest = d;

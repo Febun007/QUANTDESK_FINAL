@@ -1119,7 +1119,7 @@ function App({ user, onLogout, dark, toggleTheme }) {
     setLoadingStocks(true); setStocksError(null);
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 45000);
-    fetch(`${API}/stocks?symbols=${watchlist.join(",")}`, { signal: controller.signal })
+    apiFetch(`${API}/stocks?symbols=${watchlist.join(",")}`, { signal: controller.signal })
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(data => {
         if (!active) return;
@@ -1151,7 +1151,7 @@ function App({ user, onLogout, dark, toggleTheme }) {
     if (!symbol) return;
     let active = true;
     setLoadingHistory(true); setMlPrediction(null); setShowForecast(false); setMlError(null);
-    fetch(`${API}/history/${symbol}?days=${timeRange}`)
+    apiFetch(`${API}/history/${symbol}?days=${timeRange}`)
       .then(r => r.json())
       .then(data => {
         if (!active) return;

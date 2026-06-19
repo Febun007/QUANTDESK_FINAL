@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { GlassPanel, Spinner, API, getCurrencySymbol } from "../components/SharedComponents";
+import { GlassPanel, Spinner, API, getCurrencySymbol, apiFetch } from "../components/SharedComponents";
 
 const SECTOR_ETFS = [
   { symbol: "XLK", name: "Technology", icon: "💻" },
@@ -46,9 +46,9 @@ export default function MarketOverview({ dark }) {
     setLoading(true);
     try {
       const [idxRes, secRes, stkRes] = await Promise.all([
-        fetch(`${API}/stocks?symbols=${INDEX_SYMBOLS.map(i => i.symbol).join(",")}`),
-        fetch(`${API}/stocks?symbols=${SECTOR_ETFS.map(s => s.symbol).join(",")}`),
-        fetch(`${API}/stocks?symbols=${POPULAR_STOCKS.join(",")}`),
+        apiFetch(`${API}/stocks?symbols=${INDEX_SYMBOLS.map(i => i.symbol).join(",")}`),
+        apiFetch(`${API}/stocks?symbols=${SECTOR_ETFS.map(s => s.symbol).join(",")}`),
+        apiFetch(`${API}/stocks?symbols=${POPULAR_STOCKS.join(",")}`),
       ]);
       const [idxData, secData, stkData] = await Promise.all([idxRes.json(), secRes.json(), stkRes.json()]);
       setIndices(Array.isArray(idxData) ? idxData : []);
