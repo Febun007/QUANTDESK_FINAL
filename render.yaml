@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: quantdesk-unified
+    runtime: python
+    rootDir: .
+    buildCommand: >
+      pip install -r backend/requirements.txt &&
+      pip install -r ml-backend/requirements.txt &&
+      pip install gunicorn &&
+      cd frontend && npm install && npm run build && cd ..
+    startCommand: >
+      gunicorn
+      --pythonpath backend:ml-backend
+      --bind 0.0.0.0:$PORT
+      --workers 2
+      --timeout 300
+      wsgi:app
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: USER_EMAIL
+        sync: false
+      - key: USER_PASSWORD
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: RENDER_EXTERNAL_URL
+        sync: false
+      - key: MONGO_URI
+        sync: false

@@ -1,0 +1,8 @@
+flask
+flask-cors
+numpy
+yfinance
+python-dotenv
+gunicorn
+requests
+torch

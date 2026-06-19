@@ -1,0 +1,11 @@
+flask
+flask-cors
+flask-caching
+flask-limiter
+yfinance
+requests
+python-dotenv
+gunicorn
+pymongo
+bcrypt
+pyjwt

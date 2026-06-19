@@ -1,0 +1,849 @@
+import Login from "./Login";
+import ModelAccuracy from "./ModelAccuracy";
+import React, { useState, useEffect, useRef } from "react";
+import {
+    AreaChart, Area, XAxis, YAxis,
+    CartesianGrid, Tooltip,
+    ResponsiveContainer, ReferenceLine
+} from "recharts";
+
+const API = "http://127.0.0.1:5000/api";
+const ML_API = "http://127.0.0.1:5001/api";
+const AGENT_API = "http://127.0.0.1:5002/agent";
+
+/* ── GLOBAL STYLES — LIQUID GLASS ── */
+const GlobalStyles = ({ dark }) => (
+    <style>{`
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── DARK MODE VARIABLES ── */
+    :root {
+      --glass:        rgba(255,255,255,0.06);
+      --glass-hover:  rgba(255,255,255,0.10);
+      --glass-border: rgba(255,255,255,0.12);
+      --glass-blur:   24px;
+      --gold:         #E8A020;
+      --gold-light:   #FFD580;
+      --green:        #30D158;
+      --red:          #FF453A;
+      --blue:         #0A84FF;
+      --text:         rgba(255,255,255,0.92);
+      --text2:        rgba(255,255,255,0.50);
+      --text3:        rgba(255,255,255,0.25);
+      --divider:      rgba(255,255,255,0.12);
+      --mono:         'JetBrains Mono', monospace;
+      --body:         'Outfit', sans-serif;
+      --input-bg:     rgba(255,255,255,0.55);
+      --input-border: rgba(255,255,255,0.7);
+      --input-placeholder: rgba(20,20,30,0.25);
+      --sidebar-border: rgba(255,255,255,0.3);
+      --panel-shadow: 0 8px 32px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 0 rgba(255,255,255,0.2);
+    }
+
+    /* ── LIGHT MODE OVERRIDES ── */
+    ${!dark ? `
+    :root {
+      --glass:        rgba(255,255,255,0.55);
+      --glass-hover:  rgba(255,255,255,0.72);
+      --glass-border: rgba(0,0,0,0.10);
+      --text:         rgba(10,14,30,0.90);
+      --text2:        rgba(10,14,30,0.55);
+      --text3:        rgba(10,14,30,0.30);
+      --divider:      rgba(0,0,0,0.10);
+      --gold:         #C47D0A;
+      --green:        #1A9940;
+      --red:          #D93025;
+      --input-bg:     rgba(255,255,255,0.75);
+      --input-border: rgba(0,0,0,0.15);
+      --input-placeholder: rgba(10,14,30,0.30);
+      --sidebar-border: rgba(0,0,0,0.08);
+      --panel-shadow: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -1px 0 rgba(0,0,0,0.04);
+    }` : ""}
+
+    body {
+      background: ${dark ? "#0a0e1a" : "#dde8f5"};
+      font-family: var(--body);
+      color: var(--text);
+      overflow: hidden;
+      transition: background 0.4s ease, color 0.3s ease;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: ${dark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.12)"}; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(232,160,32,0.5); }
+
+    /* Animations */
+    @keyframes pulse-dot  { 0%,100%{opacity:1;}50%{opacity:0.2;} }
+    @keyframes fadeUp     { from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);} }
+    @keyframes ticker     { from{transform:translateX(0);}to{transform:translateX(-50%);} }
+    @keyframes spin       { to{transform:rotate(360deg);} }
+    @keyframes shimmer    { 0%{background-position:-400px 0;}100%{background-position:400px 0;} }
+    @keyframes blobFloat  { 0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(15px,-10px) scale(1.04);} }
+
+    .fade-up { animation: fadeUp 0.3s ease forwards; }
+
+    .skeleton {
+      background: linear-gradient(90deg,
+        ${dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"} 25%,
+        ${dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)"} 50%,
+        ${dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"} 75%
+      );
+      background-size: 400px 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 8px;
+    }
+
+    /* Glass utility */
+    .glass {
+      background: var(--glass);
+      backdrop-filter: blur(var(--glass-blur)) saturate(1.8);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.8);
+      border: 1px solid var(--glass-border);
+    }
+
+    /* Chat scrollbar */
+    .chat-messages::-webkit-scrollbar { width: 5px; }
+    .chat-messages::-webkit-scrollbar-track { background: transparent; }
+    .chat-messages::-webkit-scrollbar-thumb { background: ${dark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.10)"}; border-radius: 3px; }
+    .chat-messages::-webkit-scrollbar-thumb:hover { background: rgba(232,160,32,0.4); }
+
+    input {
+      font-family: var(--body);
+      background: var(--input-bg);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--input-border);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 9px 14px;
+      font-size: 13px;
+      outline: none;
+      transition: all 0.2s;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+    }
+    input:focus {
+      background: ${dark ? "rgba(255,255,255,0.80)" : "rgba(255,255,255,0.95)"};
+      border-color: rgba(232,160,32,0.5);
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.05), 0 0 0 3px rgba(232,160,32,0.12);
+    }
+    input::placeholder { color: var(--input-placeholder); }
+
+    /* Smooth theme transition on all elements */
+    *, *::before, *::after {
+      transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+    }
+    /* But don't slow down animations */
+    .skeleton, [style*="animation"] { transition: none !important; }
+
+    button { cursor: pointer; font-family: var(--body); }
+  `}</style>
+);
+
+/* ── BACKGROUND ── */
+const Background = ({ dark }) => {
+    const blobs = dark ? [
+        { w: 400, h: 400, bg: "rgba(232,160,32,0.12)", t: "-100px", l: "-80px", delay: "0s" },
+        { w: 300, h: 300, bg: "rgba(60,120,255,0.10)", t: "15%", r: "-60px", delay: "-3s" },
+        { w: 250, h: 250, bg: "rgba(120,60,255,0.08)", b: "5%", l: "25%", delay: "-5s" },
+        { w: 220, h: 220, bg: "rgba(30,200,120,0.08)", b: "-50px", r: "10%", delay: "-2s" },
+    ] : [
+        { w: 400, h: 400, bg: "rgba(255,200,60,0.20)", t: "-100px", l: "-80px", delay: "0s" },
+        { w: 300, h: 300, bg: "rgba(100,160,255,0.18)", t: "15%", r: "-60px", delay: "-3s" },
+        { w: 250, h: 250, bg: "rgba(180,80,255,0.14)", b: "5%", l: "25%", delay: "-5s" },
+        { w: 220, h: 220, bg: "rgba(60,220,140,0.16)", b: "-50px", r: "10%", delay: "-2s" },
+    ];
+    const gradient = dark
+        ? `radial-gradient(ellipse 70% 70% at 15% 10%, rgba(232,160,32,0.10) 0%, transparent 60%),
+       radial-gradient(ellipse 60% 60% at 85% 8%,  rgba(60,100,255,0.08) 0%, transparent 55%),
+       radial-gradient(ellipse 55% 55% at 75% 92%, rgba(120,60,255,0.07) 0%, transparent 50%),
+       linear-gradient(135deg, #0a0e1a 0%, #0e1225 50%, #0a1020 100%)`
+        : `radial-gradient(ellipse 70% 70% at 15% 10%, rgba(255,200,80,0.30) 0%, transparent 60%),
+       radial-gradient(ellipse 60% 60% at 85% 8%,  rgba(100,180,255,0.25) 0%, transparent 55%),
+       radial-gradient(ellipse 55% 55% at 75% 92%, rgba(180,100,255,0.18) 0%, transparent 50%),
+       radial-gradient(ellipse 70% 70% at 8%  88%, rgba(80,220,160,0.20)  0%, transparent 55%),
+       linear-gradient(135deg, #dde8f5 0%, #e6ddf5 50%, #d8e8f2 100%)`;
+    return (
+        <div style={{ position: "fixed", inset: 0, zIndex: 0, overflow: "hidden", transition: "background 0.4s ease" }}>
+            <div style={{ position: "absolute", inset: 0, background: gradient, transition: "background 0.4s ease" }} />
+            {blobs.map((b, i) => (
+                <div key={i} style={{ position: "absolute", width: b.w, height: b.h, borderRadius: "50%", background: b.bg, filter: "blur(70px)", top: b.t, left: b.l, right: b.r, bottom: b.b, animation: `blobFloat ${7 + i}s ease-in-out ${b.delay} infinite`, transition: "background 0.4s ease" }} />
+            ))}
+        </div>
+    );
+};
+
+/* ── GLASS PANEL ── */
+const GlassPanel = ({ children, style, className }) => (
+    <div className={`glass ${className || ""}`} style={{
+        borderRadius: 20,
+        boxShadow: "var(--panel-shadow)",
+        ...style
+    }}>
+        {children}
+    </div>
+);
+
+/* ── TICKER ── */
+const Ticker = ({ stocks }) => {
+    if (!stocks.length) return <div style={{ height: 32 }} />;
+    const doubled = [...stocks, ...stocks];
+    return (
+        <div style={{ overflow: "hidden", height: 32, display: "flex", alignItems: "center" }}>
+            <div style={{ display: "flex", animation: "ticker 45s linear infinite", whiteSpace: "nowrap" }}>
+                {doubled.map((s, i) => (
+                    <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 20px", fontFamily: "var(--mono)", fontSize: 11 }}>
+                        <span style={{ color: "var(--text2)", fontWeight: 500 }}>{s.symbol}</span>
+                        <span style={{ color: "var(--text)", fontWeight: 600 }}>${s.price?.toFixed(2)}</span>
+                        <span style={{ color: s.pct >= 0 ? "var(--green)" : "var(--red)", fontSize: 10 }}>
+                            {s.pct >= 0 ? "▲" : "▼"}{Math.abs(s.pct).toFixed(2)}%
+                        </span>
+                    </span>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+/* ── STAT BOX ── */
+const StatBox = ({ label, value, sub, accent, loading }) => (
+    <div style={{
+        padding: "12px 16px",
+        background: "var(--glass)",
+        backdropFilter: "blur(12px)",
+        border: "1px solid var(--glass-border)",
+        borderRadius: 16,
+        flex: 1,
+        minWidth: 110,
+        boxShadow: "var(--panel-shadow)"
+    }}>
+        <div style={{ fontFamily: "var(--body)", fontSize: 10, fontWeight: 600, letterSpacing: "0.10em", color: "var(--text2)", textTransform: "uppercase", marginBottom: 5 }}>{label}</div>
+        {loading
+            ? <div className="skeleton" style={{ height: 20, width: "70%" }} />
+            : <div style={{ fontFamily: "var(--mono)", fontSize: 16, fontWeight: 600, color: accent || "var(--text)", whiteSpace: "nowrap" }}>{value}</div>
+        }
+        {sub && !loading && <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text3)", marginTop: 2 }}>{sub}</div>}
+    </div>
+);
+
+/* ── TOOLTIP ── */
+const CustomTooltip = ({ active, payload }) => {
+    if (!active || !payload?.length) return null;
+    const item = payload[0]?.payload || {};
+    return (
+        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.9)", borderRadius: 12, padding: "10px 14px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}>
+            <div style={{ color: "var(--text2)", fontSize: 11, marginBottom: 4, fontWeight: 500 }}>{item.date}</div>
+            {payload.find(p => p.dataKey === "price") &&
+                <div style={{ color: "var(--gold)", fontSize: 13, fontWeight: 700, fontFamily: "var(--mono)" }}>
+                    ${payload.find(p => p.dataKey === "price")?.value?.toFixed(2)}
+                </div>}
+            {payload.find(p => p.dataKey === "predicted") &&
+                <div style={{ color: "var(--green)", fontSize: 12, fontWeight: 600, fontFamily: "var(--mono)", marginTop: 2 }}>
+                    Forecast: ${payload.find(p => p.dataKey === "predicted")?.value?.toFixed(2)}
+                </div>}
+            {item.volume && <div style={{ color: "var(--text3)", fontSize: 11, marginTop: 2, fontFamily: "var(--mono)" }}>Vol: {(item.volume / 1e6).toFixed(1)}M</div>}
+        </div>
+    );
+};
+
+/* ── SPINNER ── */
+const Spinner = ({ label = "Loading..." }) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, flexDirection: "column", gap: 12, minHeight: 200 }}>
+        <div style={{ width: 32, height: 32, border: "2.5px solid rgba(232,160,32,0.2)", borderTop: "2.5px solid var(--gold)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+        <span style={{ fontFamily: "var(--body)", fontSize: 13, color: "var(--text2)", fontWeight: 500 }}>{label}</span>
+    </div>
+);
+
+/* ── SIDEBAR SKELETON ── */
+const SidebarSkeleton = () => (
+    <>
+        {[...Array(6)].map((_, i) => (
+            <div key={i} style={{ padding: "12px 16px", marginBottom: 4 }}>
+                <div className="skeleton" style={{ height: 14, width: 50, marginBottom: 8 }} />
+                <div className="skeleton" style={{ height: 10, width: 100, marginBottom: 6 }} />
+                <div className="skeleton" style={{ height: 14, width: 65 }} />
+            </div>
+        ))}
+    </>
+);
+
+/* ── SEARCH BAR ── */
+const SearchBar = ({ onAdd }) => {
+    const [q, setQ] = useState("");
+    const [results, setResults] = useState([]);
+    const [searching, setSearching] = useState(false);
+
+    useEffect(() => {
+        if (!q.trim()) { setResults([]); return; }
+        const t = setTimeout(async () => {
+            setSearching(true);
+            try {
+                const res = await fetch(`${API}/search?q=${encodeURIComponent(q)}`);
+                const data = await res.json();
+                setResults((data || []).filter(r => r.type === "EQUITY" || r.type === "ETF").slice(0, 6));
+            } catch { setResults([]); }
+            setSearching(false);
+        }, 400);
+        return () => clearTimeout(t);
+    }, [q]);
+
+    return (
+        <div style={{ position: "relative", padding: "12px 16px 8px" }}>
+            <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13, opacity: 0.35 }}>⌕</span>
+                <input placeholder="Search ticker..." value={q} onChange={e => setQ(e.target.value)} style={{ width: "100%", paddingLeft: 30 }} />
+                {searching && <div style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", width: 10, height: 10, border: "1.5px solid rgba(232,160,32,0.3)", borderTop: "1.5px solid var(--gold)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
+            </div>
+            {results.length > 0 && (
+                <div style={{ position: "absolute", top: "100%", left: 8, right: 8, background: "rgba(255,255,255,0.9)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.9)", borderRadius: 16, zIndex: 100, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.15)" }}>
+                    {results.map(r => (
+                        <div key={r.symbol} onClick={() => { onAdd(r.symbol); setQ(""); setResults([]); }}
+                            style={{ padding: "10px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(0,0,0,0.05)", transition: "background 0.15s" }}
+                            onMouseEnter={e => e.currentTarget.style.background = "rgba(232,160,32,0.08)"}
+                            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                        >
+                            <span style={{ fontWeight: 700, fontSize: 13, color: "var(--gold)" }}>{r.symbol}</span>
+                            <span style={{ fontSize: 11, color: "var(--text2)", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+/* ── AI CHAT ── */
+function AIChat({ selectedStock }) {
+    const [messages, setMessages] = useState([
+        { role: "assistant", content: `**QuantDesk Agent ready.**\n\nAnalyzing **${selectedStock.symbol}** with live fundamentals, margins, analyst ratings & earnings data.\n\nWhat would you like to know?` }
+    ]);
+    const [input, setInput] = useState("");
+    const [loading, setLoading] = useState(false);
+    const bottomRef = useRef();
+
+    useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+    useEffect(() => {
+        setMessages([{ role: "assistant", content: `**QuantDesk Agent ready.**\n\nAnalyzing **${selectedStock.symbol}** with live fundamentals, margins, analyst ratings & earnings data.\n\nWhat would you like to know?` }]);
+    }, [selectedStock.symbol]);
+
+    async function send(overrideMsg) {
+        const userMsg = (overrideMsg || input).trim();
+        if (!userMsg || loading) return;
+        setInput("");
+        setMessages(m => [...m, { role: "user", content: userMsg }]);
+        setLoading(true);
+        try {
+            const res = await fetch(`${AGENT_API}/analyze`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ticker: selectedStock.symbol, question: userMsg, history: messages.slice(-6) })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            setMessages(m => [...m, { role: "assistant", content: data.answer }]);
+        } catch (e) {
+            setMessages(m => [...m, { role: "assistant", content: `⚠ ${e.message}` }]);
+        } finally { setLoading(false); }
+    }
+
+    function renderInline(text) {
+        return text.split(/(\*\*[^*]+\*\*)/).map((p, i) =>
+            p.startsWith("**") ? <strong key={i} style={{ color: "var(--text)", fontWeight: 700 }}>{p.slice(2, -2)}</strong> : p
+        );
+    }
+
+    function renderContent(text) {
+        return text.split("\n").map((line, i) => {
+            if (line.startsWith("# ")) return <div key={i} style={{ fontWeight: 800, fontSize: 15, color: "var(--gold)", marginTop: 10, marginBottom: 4 }}>{line.slice(2)}</div>;
+            if (line.startsWith("## ")) return <div key={i} style={{ fontWeight: 700, fontSize: 13, color: "var(--text)", marginTop: 8, marginBottom: 2 }}>{line.slice(3)}</div>;
+            if (line.startsWith("### ")) return <div key={i} style={{ fontWeight: 600, fontSize: 12, color: "var(--text2)", marginTop: 6, marginBottom: 2 }}>{line.slice(4)}</div>;
+            if (line.startsWith("---")) return <div key={i} style={{ borderTop: "1px solid rgba(0,0,0,0.08)", margin: "8px 0" }} />;
+            if (line.startsWith("|")) {
+                const cells = line.split("|").filter(c => c.trim() && !c.match(/^[-:\s]+$/));
+                if (!cells.length) return null;
+                return (
+                    <div key={i} style={{ display: "flex", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+                        {cells.map((cell, j) => (
+                            <div key={j} style={{ flex: 1, padding: "4px 8px", fontFamily: "var(--mono)", fontSize: 10, color: j === 0 ? "var(--text)" : "var(--text2)", borderRight: j < cells.length - 1 ? "1px solid rgba(0,0,0,0.06)" : "none" }}>
+                                {cell.trim().replace(/\*\*/g, "")}
+                            </div>
+                        ))}
+                    </div>
+                );
+            }
+            if (line.match(/^[-*] /)) return (
+                <div key={i} style={{ display: "flex", gap: 6, paddingLeft: 8, marginTop: 2 }}>
+                    <span style={{ color: "var(--gold)", flexShrink: 0 }}>·</span>
+                    <span style={{ color: "var(--text2)", fontSize: 12 }}>{renderInline(line.replace(/^[-*] /, ""))}</span>
+                </div>
+            );
+            if (line.match(/\*\*(BUY|HOLD|SELL|STRONG BUY|STRONG SELL)\*\*/i)) {
+                const signal = line.match(/STRONG BUY|STRONG SELL|BUY|HOLD|SELL/i)?.[0]?.toUpperCase();
+                const color = signal?.includes("BUY") ? "#30D158" : signal === "HOLD" ? "#E8A020" : "#FF453A";
+                return (
+                    <div key={i} style={{ margin: "8px 0", padding: "8px 14px", background: `${color}15`, border: `1px solid ${color}40`, borderRadius: 12, fontSize: 12, color, fontWeight: 600 }}>
+                        {line.replace(/\*\*/g, "")}
+                    </div>
+                );
+            }
+            if (!line.trim()) return <div key={i} style={{ height: 5 }} />;
+            return <div key={i} style={{ fontSize: 12, lineHeight: 1.7, color: "var(--text2)" }}>{renderInline(line)}</div>;
+        });
+    }
+
+    const quickActions = [
+        { label: "Full Analysis", q: `Give me a complete investment analysis for ${selectedStock.symbol}.` },
+        { label: "Buy or Sell?", q: `Should I buy, hold, or sell ${selectedStock.symbol} right now?` },
+        { label: "Key Financials", q: `Show key financial metrics for ${selectedStock.symbol} in a table.` },
+        { label: "Analyst View", q: `What is the analyst consensus and price target for ${selectedStock.symbol}?` },
+    ];
+
+    return (
+        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+            {/* Header */}
+            <div style={{ padding: "14px 18px 10px", borderBottom: "1px solid var(--glass-border)", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--green)", boxShadow: "0 0 8px rgba(48,209,88,0.6)", animation: "pulse-dot 2s ease infinite" }} />
+                <span style={{ fontWeight: 700, fontSize: 12, letterSpacing: "0.05em", color: "var(--text2)", textTransform: "uppercase" }}>AI Analyst</span>
+                <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text3)", fontWeight: 500 }}>Live Data</span>
+            </div>
+
+            {/* Quick actions */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, padding: "10px 14px", borderBottom: "1px solid var(--glass-border)", flexShrink: 0 }}>
+                {quickActions.map(a => (
+                    <button key={a.label} onClick={() => send(a.q)} disabled={loading}
+                        style={{
+                            padding: "4px 12px",
+                            background: "var(--glass)",
+                            backdropFilter: "blur(8px)",
+                            color: "var(--text2)",
+                            border: "1px solid var(--glass-border)",
+                            borderRadius: 20,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            transition: "all 0.15s",
+                            boxShadow: "var(--panel-shadow)"
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = "rgba(232,160,32,0.15)"; e.currentTarget.style.borderColor = "rgba(232,160,32,0.4)"; e.currentTarget.style.color = "var(--gold)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "var(--glass)"; e.currentTarget.style.borderColor = "var(--glass-border)"; e.currentTarget.style.color = "var(--text2)"; }}
+                    >{a.label}</button>
+                ))}
+            </div>
+
+            {/* Messages */}
+            <div className="chat-messages" style={{ flex: 1, overflowY: "scroll", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+                {messages.map((m, i) => (
+                    <div key={i} className="fade-up" style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+                        {m.role === "assistant" && (
+                            <div style={{ width: 22, height: 22, borderRadius: 8, background: "linear-gradient(135deg,#E8A020,#FFB84D)", display: "flex", alignItems: "center", justifyContent: "center", marginRight: 8, flexShrink: 0, marginTop: 2, boxShadow: "0 2px 8px rgba(232,160,32,0.3)", fontSize: 10 }}>⚡</div>
+                        )}
+                        <div style={{
+                            maxWidth: "88%",
+                            padding: "9px 13px",
+                            borderRadius: m.role === "user" ? "16px 16px 4px 16px" : "4px 16px 16px 16px",
+                            background: m.role === "user" ? "rgba(232,160,32,0.15)" : "var(--glass)",
+                            backdropFilter: "blur(12px)",
+                            border: `1px solid ${m.role === "user" ? "rgba(232,160,32,0.25)" : "var(--glass-border)"}`,
+                            fontSize: 12,
+                            lineHeight: 1.7,
+                            color: "var(--text2)",
+                            boxShadow: "var(--panel-shadow)"
+                        }}>
+                            {m.role === "user" ? <span style={{ color: "var(--text)", fontWeight: 500 }}>{m.content}</span> : renderContent(m.content)}
+                        </div>
+                    </div>
+                ))}
+                {loading && (
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                        <div style={{ width: 22, height: 22, borderRadius: 8, background: "linear-gradient(135deg,#E8A020,#FFB84D)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 10 }}>⚡</div>
+                        <div style={{
+                            padding: "10px 16px",
+                            background: "var(--glass)",
+                            backdropFilter: "blur(12px)",
+                            border: "1px solid var(--glass-border)",
+                            borderRadius: "4px 16px 16px 16px",
+                            boxShadow: "var(--panel-shadow)"
+                        }}>
+                            {[0, 1, 2].map(n => <span key={n} style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "var(--gold)", margin: "0 2px", animation: `pulse-dot 1.2s ease ${n * 0.2}s infinite` }} />)}
+                        </div>
+                    </div>
+                )}
+                <div ref={bottomRef} />
+            </div>
+
+            {/* Input */}
+            <div style={{ padding: "12px 16px", borderTop: "1px solid var(--glass-border)", flexShrink: 0 }}>
+                <div style={{ display: "flex", gap: 8 }}>
+                    <input style={{ flex: 1 }} placeholder={`Ask about ${selectedStock.symbol}...`}
+                        value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} />
+                    <button onClick={() => send()} disabled={loading}
+                        style={{ padding: "0 18px", background: loading ? "rgba(0,0,0,0.06)" : "linear-gradient(135deg,#E8A020,#FFB84D)", color: loading ? "var(--text3)" : "#fff", border: "none", borderRadius: 12, fontSize: 12, fontWeight: 700, boxShadow: loading ? "none" : "0 4px 12px rgba(232,160,32,0.30)", transition: "all 0.2s" }}>
+                        {loading ? "..." : "Ask"}
+                    </button>
+                </div>
+                <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text3)", marginTop: 6 }}>
+                    Claude · 15+ Live Indicators · {selectedStock.symbol}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* ── MAIN APP ── */
+function App({ user, onLogout, dark }) {
+    const [stocks, setStocks] = useState([]);
+    const [idx, setIdx] = useState(0);
+    const [history, setHistory] = useState([]);
+    const [timeRange, setTimeRange] = useState(90);
+    const [loadingStocks, setLoadingStocks] = useState(true);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+    const [stocksError, setStocksError] = useState(null);
+    const [watchlist, setWatchlist] = useState([
+        "NVDA", "AAPL", "TSLA", "AMZN", "MSFT", "META", "GOOGL", "NFLX", "AMD", "COIN"
+    ]);
+    const [mlPrediction, setMlPrediction] = useState(null);
+    const [mlLoading, setMlLoading] = useState(false);
+    const [mlError, setMlError] = useState(null);
+    const [showForecast, setShowForecast] = useState(false);
+    const [showAccuracy, setShowAccuracy] = useState(false);
+
+    useEffect(() => {
+        setLoadingStocks(true); setStocksError(null);
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 15000);
+        fetch(`${API}/stocks?symbols=${watchlist.join(",")}`, { signal: controller.signal })
+            .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+            .then(data => { setStocks(data); setLoadingStocks(false); })
+            .catch(err => { if (err.name !== "AbortError") { setStocksError("Cannot connect to server"); setLoadingStocks(false); } })
+            .finally(() => clearTimeout(tid));
+        return () => controller.abort();
+    }, [watchlist]);
+
+    useEffect(() => {
+        if (!stocks.length) return;
+        const symbol = stocks[Math.min(idx, stocks.length - 1)]?.symbol;
+        if (!symbol) return;
+        setLoadingHistory(true); setMlPrediction(null); setShowForecast(false); setMlError(null);
+        fetch(`${API}/history/${symbol}?days=${timeRange}`)
+            .then(r => r.json())
+            .then(data => { setHistory(Array.isArray(data) ? data : []); setLoadingHistory(false); })
+            .catch(() => setLoadingHistory(false));
+    }, [idx, stocks, timeRange]);
+
+    async function runPrediction() {
+        if (!stock) return;
+        setMlLoading(true); setMlError(null); setMlPrediction(null); setShowForecast(false);
+        try {
+            const res = await fetch(`${ML_API}/predict/${stock.symbol}`);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            setMlPrediction(data); setShowForecast(true);
+        } catch (e) { setMlError(e.message); }
+        finally { setMlLoading(false); }
+    }
+
+    function addToWatchlist(symbol) { if (!watchlist.includes(symbol)) setWatchlist(w => [...w, symbol]); }
+    function removeFromWatchlist(symbol) { setWatchlist(w => w.filter(s => s !== symbol)); setIdx(0); }
+
+    const stock = stocks[Math.min(idx, stocks.length - 1)];
+
+    const chartData = (() => {
+        if (!showForecast || !mlPrediction) return history;
+        const hist = history.map(d => ({ ...d, predicted: null }));
+        const forecast = mlPrediction.forecast.map(f => ({ date: f.date, price: null, predicted: f.predicted }));
+        if (forecast.length && hist.length) forecast[0].predicted = hist[hist.length - 1].price;
+        return [...hist, ...forecast];
+    })();
+
+    const allPrices = chartData.map(d => d.price ?? d.predicted).filter(v => v != null);
+    const minPrice = allPrices.length ? Math.min(...allPrices) : 0;
+    const maxPrice = allPrices.length ? Math.max(...allPrices) : 0;
+    const priceRange = maxPrice - minPrice;
+    const forecastStartDate = showForecast && mlPrediction?.forecast?.length ? mlPrediction.forecast[0].date : null;
+
+    return (
+        <>
+            <GlobalStyles dark={dark} />
+            <Background dark={dark} />
+            <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", position: "relative", zIndex: 1 }}>
+
+                {/* TOP BAR */}
+                <div style={{ padding: "10px 20px", flexShrink: 0 }}>
+                    <GlassPanel style={{ borderRadius: 16, padding: "0 20px", height: 48, display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", gap: 16, overflow: "hidden" }}>
+
+                        {/* LEFT — Logo */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
+                            <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: "-0.5px", whiteSpace: "nowrap" }}>
+                                Quant<span style={{ background: "linear-gradient(135deg,#E8A020,#FFB84D)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Desk</span>
+                            </div>
+                            <div style={{ width: 1, height: 18, background: "var(--divider)", flexShrink: 0 }} />
+                        </div>
+
+                        {/* CENTRE — Ticker */}
+                        <div style={{ overflow: "hidden", minWidth: 0 }}>
+                            <Ticker stocks={stocks} />
+                        </div>
+
+                        {/* RIGHT — Status + buttons */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                            <div style={{ width: 1, height: 18, background: "var(--divider)" }} />
+                            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                <div style={{ width: 6, height: 6, borderRadius: "50%", background: stocksError ? "var(--red)" : loadingStocks ? "var(--gold)" : "var(--green)", boxShadow: `0 0 6px ${stocksError ? "rgba(255,69,58,0.6)" : loadingStocks ? "rgba(232,160,32,0.6)" : "rgba(48,209,88,0.6)"}`, animation: "pulse-dot 2s ease infinite" }} />
+                                <span style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 500, color: stocksError ? "var(--red)" : loadingStocks ? "var(--gold)" : "var(--green)", whiteSpace: "nowrap" }}>
+                                    {stocksError ? "OFFLINE" : loadingStocks ? "LOADING..." : "LIVE"}
+                                </span>
+                            </div>
+                            <div style={{ width: 1, height: 18, background: "var(--divider)" }} />
+                            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text2)", whiteSpace: "nowrap" }}>{user?.name}</span>
+                            <button onClick={() => setShowAccuracy(true)}
+                                style={{ padding: "5px 14px", background: "var(--glass)", backdropFilter: "blur(8px)", border: "1px solid var(--glass-border)", borderRadius: 20, fontSize: 11, fontWeight: 600, color: "var(--text2)", transition: "all 0.2s", whiteSpace: "nowrap" }}
+                                onMouseEnter={e => { e.currentTarget.style.color = "#E8A020"; e.currentTarget.style.borderColor = "rgba(232,160,32,0.4)"; }}
+                                onMouseLeave={e => { e.currentTarget.style.color = "var(--text2)"; e.currentTarget.style.borderColor = "var(--glass-border)"; }}
+                            >📊 Model Report</button>
+                            <button onClick={onLogout}
+                                style={{ padding: "5px 14px", background: "var(--glass)", backdropFilter: "blur(8px)", border: "1px solid var(--glass-border)", borderRadius: 20, fontSize: 11, fontWeight: 600, color: "var(--text2)", transition: "all 0.2s", whiteSpace: "nowrap" }}
+                                onMouseEnter={e => { e.currentTarget.style.color = "var(--red)"; e.currentTarget.style.borderColor = "rgba(255,69,58,0.3)"; }}
+                                onMouseLeave={e => { e.currentTarget.style.color = "var(--text2)"; e.currentTarget.style.borderColor = "var(--glass-border)"; }}
+                            >Sign Out</button>
+                        </div>
+
+                    </GlassPanel>
+                </div>
+
+                {/* MAIN 3-COL */}
+                <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 340px", flex: 1, overflow: "hidden", gap: 10, padding: "0 20px 14px" }}>
+
+                    {/* SIDEBAR */}
+                    <GlassPanel style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                        <SearchBar onAdd={addToWatchlist} />
+                        <div style={{ padding: "6px 16px 8px", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: "var(--text3)", textTransform: "uppercase", borderBottom: "1px solid var(--glass-border)" }}>
+                            Watchlist · {watchlist.length}
+                        </div>
+                        <div style={{ flex: 1, overflowY: "auto" }}>
+                            {stocksError && <div style={{ padding: 16, fontSize: 12, color: "var(--red)", lineHeight: 1.6 }}>⚠ {stocksError}</div>}
+                            {loadingStocks && !stocksError && <SidebarSkeleton />}
+                            {!loadingStocks && !stocksError && stocks.map((s, i) => {
+                                const active = i === idx;
+                                return (
+                                    <div key={s.symbol} onClick={() => setIdx(i)}
+                                        style={{ padding: "10px 16px", cursor: "pointer", background: active ? "rgba(232,160,32,0.10)" : "transparent", borderLeft: `3px solid ${active ? "var(--gold)" : "transparent"}`, borderBottom: "1px solid var(--sidebar-border)", transition: "all 0.15s" }}
+                                        onMouseEnter={e => { if (!active) e.currentTarget.style.background = "var(--glass-hover)"; }}
+                                        onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
+                                    >
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                                            <span style={{ fontWeight: 800, fontSize: 13, color: active ? "var(--gold)" : "var(--text)" }}>{s.symbol}</span>
+                                            <span style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 600, color: s.pct >= 0 ? "var(--green)" : "var(--red)" }}>{s.pct >= 0 ? "▲" : "▼"}{Math.abs(s.pct).toFixed(2)}%</span>
+                                        </div>
+                                        <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</div>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                            <span style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>${s.price?.toFixed(2)}</span>
+                                            <span onClick={e => { e.stopPropagation(); removeFromWatchlist(s.symbol); }} style={{ fontSize: 11, color: "var(--text3)", cursor: "pointer", transition: "color 0.15s" }}
+                                                onMouseEnter={e => e.currentTarget.style.color = "var(--red)"}
+                                                onMouseLeave={e => e.currentTarget.style.color = "var(--text3)"}
+                                            >✕</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </GlassPanel>
+
+                    {/* CHART PANEL */}
+                    <GlassPanel style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                        {loadingStocks && !stocksError ? <Spinner label="Loading market data..." />
+                            : stocksError ? (
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, flexDirection: "column", gap: 12 }}>
+                                    <div style={{ fontSize: 32 }}>⚠</div>
+                                    <div style={{ fontSize: 13, color: "var(--text2)", textAlign: "center", lineHeight: 1.8 }}>
+                                        Cannot connect to Flask server.<br />
+                                        <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: "var(--gold)" }}>python server.py</span>
+                                    </div>
+                                </div>
+                            ) : !stock ? <Spinner /> : (
+                                <>
+                                    {/* Stock header */}
+                                    <div style={{ padding: "18px 24px 14px", borderBottom: "1px solid var(--glass-border)", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                                        <div>
+                                            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 3 }}>
+                                                <span style={{ fontWeight: 800, fontSize: 28, letterSpacing: "-1px", color: "var(--text)" }}>{stock.symbol}</span>
+                                                <span style={{ fontSize: 13, color: "var(--text2)", fontWeight: 400 }}>{stock.name}</span>
+                                            </div>
+                                            <div style={{ fontSize: 11, color: "var(--text3)", fontWeight: 500 }}>{stock.sector}</div>
+                                        </div>
+                                        <div style={{ textAlign: "right" }}>
+                                            <div style={{ fontFamily: "var(--mono)", fontWeight: 700, fontSize: 26, color: "var(--text)", letterSpacing: "-0.5px" }}>${stock.price?.toFixed(2)}</div>
+                                            <div style={{ fontFamily: "var(--mono)", fontSize: 12, fontWeight: 600, color: stock.pct >= 0 ? "var(--green)" : "var(--red)" }}>
+                                                {stock.pct >= 0 ? "+" : ""}{stock.change?.toFixed(2)} ({stock.pct >= 0 ? "+" : ""}{stock.pct?.toFixed(2)}%)
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Stat row */}
+                                    <div style={{ display: "flex", gap: 6, padding: "12px 16px", flexWrap: "wrap" }}>
+                                        <StatBox label="Mkt Cap" value={stock.mktCap} />
+                                        <StatBox label="P/E Ratio" value={stock.pe} />
+                                        <StatBox label="Avg Volume" value={stock.vol} />
+                                        {mlPrediction && (
+                                            <>
+                                                <StatBox label="DL Signal" value={mlPrediction.signal}
+                                                    accent={mlPrediction.signal.includes("BUY") ? "var(--green)" : mlPrediction.signal === "HOLD" ? "var(--gold)" : "var(--red)"}
+                                                    sub="Transformer" />
+                                                <StatBox label="14d Target" value={`$${mlPrediction.targetPrice}`}
+                                                    accent={mlPrediction.deltaPct >= 0 ? "var(--green)" : "var(--red)"}
+                                                    sub={`${mlPrediction.deltaPct >= 0 ? "+" : ""}${mlPrediction.deltaPct}%`} />
+                                            </>
+                                        )}
+                                        {mlLoading && (
+                                            <>
+                                                <StatBox label="DL Signal" value="—" sub="Training..." loading />
+                                                <StatBox label="14d Target" value="—" sub="30–90s" loading />
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {/* Controls */}
+                                    <div style={{ display: "flex", gap: 6, padding: "0 16px 12px", alignItems: "center", flexWrap: "wrap" }}>
+                                        {[14, 30, 60, 90].map(d => (
+                                            <button key={d} onClick={() => setTimeRange(d)}
+                                                style={{
+                                                    padding: "5px 14px",
+                                                    background: timeRange === d ? "linear-gradient(135deg,#E8A020,#FFB84D)" : "var(--glass)",
+                                                    backdropFilter: "blur(8px)",
+                                                    color: timeRange === d ? "#fff" : "var(--text2)",
+                                                    border: `1px solid ${timeRange === d ? "transparent" : "var(--glass-border)"}`,
+                                                    borderRadius: 20,
+                                                    fontSize: 11,
+                                                    fontWeight: 600,
+                                                    boxShadow: timeRange === d ? "0 4px 12px rgba(232,160,32,0.25)" : "var(--panel-shadow)",
+                                                    transition: "all 0.2s"
+                                                }}>
+                                                {d}D
+                                            </button>
+                                        ))}
+                                        <div style={{ width: 1, height: 18, background: "var(--divider)", margin: "0 2px" }} />
+                                        <button onClick={runPrediction} disabled={mlLoading}
+                                            style={{ padding: "5px 16px", background: mlLoading ? "rgba(0,0,0,0.05)" : showForecast ? "rgba(48,209,88,0.15)" : "var(--glass)", backdropFilter: "blur(8px)", color: mlLoading ? "var(--text3)" : showForecast ? "var(--green)" : "var(--text2)", border: `1px solid ${mlLoading ? "var(--glass-border)" : showForecast ? "rgba(48,209,88,0.3)" : "var(--glass-border)"}`, borderRadius: 20, fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", gap: 5, transition: "all 0.2s" }}>
+                                            {mlLoading ? <><div style={{ width: 8, height: 8, border: "1.5px solid rgba(0,0,0,0.15)", borderTop: "1.5px solid var(--green)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />Training...</> : showForecast ? "✓ Forecast On" : "⚡ Run Transformer"}
+                                        </button>
+                                        {showForecast && (
+                                            <button onClick={() => { setShowForecast(false); setMlPrediction(null); }}
+                                                style={{ padding: "5px 12px", background: "var(--glass)", border: "1px solid var(--glass-border)", borderRadius: 20, fontSize: 11, fontWeight: 600, color: "var(--text3)" }}>Clear</button>
+                                        )}
+                                        {mlError && <span style={{ fontSize: 11, color: "var(--red)" }}>⚠ {mlError}</span>}
+                                    </div>
+
+                                    {/* Chart */}
+                                    <div style={{ flex: 1, padding: "0 12px 12px", minHeight: 240 }}>
+                                        {loadingHistory ? <Spinner label="Loading price history..." /> : (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                                    <defs>
+                                                        <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor="#E8A020" stopOpacity={0.25} />
+                                                            <stop offset="95%" stopColor="#E8A020" stopOpacity={0} />
+                                                        </linearGradient>
+                                                        <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor="#30D158" stopOpacity={0.20} />
+                                                            <stop offset="95%" stopColor="#30D158" stopOpacity={0} />
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <CartesianGrid strokeDasharray="2 4" stroke="rgba(0,0,0,0.05)" vertical={false} />
+                                                    <XAxis dataKey="date" tick={{ fontFamily: "JetBrains Mono", fontSize: 9, fill: "rgba(20,20,30,0.35)" }} tickLine={false} axisLine={false} interval={Math.floor(chartData.length / 6)} />
+                                                    <YAxis domain={[minPrice - priceRange * 0.05, maxPrice + priceRange * 0.05]} tick={{ fontFamily: "JetBrains Mono", fontSize: 9, fill: "rgba(20,20,30,0.35)" }} tickLine={false} axisLine={false} tickFormatter={v => `$${v.toFixed(0)}`} width={58} />
+                                                    <Tooltip content={<CustomTooltip />} />
+                                                    <Area dataKey="price" stroke="#E8A020" strokeWidth={2} fill="url(#goldGrad)" dot={false} activeDot={{ r: 4, fill: "#E8A020", strokeWidth: 0 }} connectNulls={false} />
+                                                    {showForecast && <Area dataKey="predicted" stroke="#30D158" strokeWidth={2} strokeDasharray="5 3" fill="url(#greenGrad)" dot={false} activeDot={{ r: 4, fill: "#30D158", strokeWidth: 0 }} connectNulls={false} />}
+                                                    {forecastStartDate && <ReferenceLine x={forecastStartDate} stroke="rgba(48,209,88,0.3)" strokeDasharray="3 3" label={{ value: "Forecast →", position: "top", fill: "#30D158", fontSize: 9 }} />}
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                    </GlassPanel>
+
+                    {/* CHAT */}
+                    <GlassPanel style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                        {stock
+                            ? <AIChat selectedStock={stock} />
+                            : <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1 }}>
+                                <span style={{ fontSize: 12, color: "var(--text3)" }}>Select a stock to begin</span>
+                            </div>
+                        }
+                    </GlassPanel>
+                </div>
+            </div>
+            {showAccuracy && <ModelAccuracy onClose={() => setShowAccuracy(false)} />}
+        </>
+    );
+}
+
+/* ── AUTH WRAPPER ── */
+export default function Root() {
+    const [user, setUser] = useState(null);
+    const [checked, setChecked] = useState(false);
+    const [dark, setDark] = useState(() => {
+        return localStorage.getItem("qd_theme") !== "light";
+    });
+
+    useEffect(() => {
+        const token = localStorage.getItem("qd_token");
+        const saved = localStorage.getItem("qd_user");
+        if (token && saved) { try { setUser(JSON.parse(saved)); } catch { } }
+        setChecked(true);
+    }, []);
+
+    useEffect(() => {
+        document.body.classList.toggle("light", !dark);
+        localStorage.setItem("qd_theme", dark ? "dark" : "light");
+    }, [dark]);
+
+    function handleLogin(userData) { setUser(userData); }
+    function handleLogout() {
+        localStorage.removeItem("qd_token");
+        localStorage.removeItem("qd_user");
+        setUser(null);
+    }
+    function toggleTheme() { setDark(d => !d); }
+
+    if (!checked) return null;
+
+    return (
+        <>
+            {/* Theme toggle */}
+            <button
+                onClick={toggleTheme}
+                title={dark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                style={{
+                    position: "fixed",
+                    bottom: 20,
+                    right: 20,
+                    zIndex: 9999,
+                    width: 42,
+                    height: 42,
+                    borderRadius: "50%",
+                    background: dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)",
+                    backdropFilter: "blur(16px)",
+                    WebkitBackdropFilter: "blur(16px)",
+                    border: dark ? "1px solid rgba(255,255,255,0.20)" : "1px solid rgba(0,0,0,0.12)",
+                    fontSize: 18,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                    transition: "all 0.2s",
+                    lineHeight: 1,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.10)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(232,160,32,0.30)"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.15)"; }}
+            >
+                {dark ? "☀️" : "🌙"}
+            </button>
+
+            {user
+                ? <App user={user} onLogout={handleLogout} dark={dark} />
+                : <Login onLogin={handleLogin} dark={dark} toggleTheme={toggleTheme} />
+            }
+        </>
+    );
+}
