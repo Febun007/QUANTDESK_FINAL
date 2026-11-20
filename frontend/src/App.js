@@ -1150,6 +1150,9 @@ function App({ user, onLogout, dark, toggleTheme }) {
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(data => {
         if (!active) return;
+        if (!Array.isArray(data) || data.length === 0) {
+          throw new Error("No market quotes returned");
+        }
         setStocks(data);
         setLoadingStocks(false);
         setStocksError(null);
@@ -1157,9 +1160,9 @@ function App({ user, onLogout, dark, toggleTheme }) {
       .catch(err => {
         if (!active) return;
         if (err.name === "AbortError") {
-          setStocksError("Request timed out — retrying...");
+          setStocksError("Market data request timed out.");
         } else {
-          setStocksError("Cannot connect to server");
+          setStocksError("Market data is temporarily unavailable.");
         }
         setLoadingStocks(false);
       })
@@ -1353,9 +1356,12 @@ function App({ user, onLogout, dark, toggleTheme }) {
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, flexDirection: "column", gap: 12 }}>
                     <div style={{ fontSize: 32 }}>⚠</div>
                     <div style={{ fontSize: 13, color: "var(--text2)", textAlign: "center", lineHeight: 1.8 }}>
-                      Cannot connect to Flask server.<br />
-                      <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: "var(--gold)" }}>python server.py</span>
+                      {stocksError}
                     </div>
+                    <button onClick={() => setWatchlist(current => [...current])}
+                      style={{ padding: "8px 18px", color: "var(--text)", background: "var(--glass)", border: "1px solid var(--glass-border)", borderRadius: 10, cursor: "pointer" }}>
+                      Retry
+                    </button>
                   </div>
                 ) : !stock ? <Spinner /> : (
                   <>

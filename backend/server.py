@@ -84,30 +84,56 @@ def is_valid_symbol(s: str) -> bool:
 
 def fetch_one(symbol):
     try:
-        ticker = yf.Ticker(symbol)
-        info   = ticker.info
-        hist   = ticker.history(period="5d")
-        # Drop rows where Close is NaN (market holidays / weekends)
-        hist   = hist.dropna(subset=["Close"])
-        if hist.empty: return None
-        current    = float(hist["Close"].iloc[-1])
-        if math.isnan(current): return None
-        prev_close = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else current
-        if math.isnan(prev_close): prev_close = current
-        change     = current - prev_close
-        pct        = (change / prev_close * 100) if prev_close else 0
+        response = req.get(
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
+            params={"range": "5d", "interval": "1d"},
+            headers={"User-Agent": "Mozilla/5.0 QuantDesk/1.0"},
+            timeout=8,
+        )
+        response.raise_for_status()
+        chart = response.json().get("chart", {})
+        results = chart.get("result") or []
+        if not results:
+            error = (chart.get("error") or {}).get("description", "provider returned no chart data")
+            print(f"  [!] No quote for {symbol}: {error}")
+            return None
+
+        result = results[0]
+        meta = result.get("meta") or {}
+        quote_rows = (result.get("indicators") or {}).get("quote") or []
+        closes = quote_rows[0].get("close", []) if quote_rows else []
+        current = meta.get("regularMarketPrice")
+        if current is None:
+            current = next((value for value in reversed(closes) if value is not None), None)
+        if current is None:
+            print(f"  [!] No price data for {symbol}")
+            return None
+
+        current = float(current)
+        prev_close = meta.get("chartPreviousClose")
+        if prev_close is None:
+            prev_close = meta.get("previousClose")
+        if prev_close is None:
+            valid_closes = [float(value) for value in closes if value is not None]
+            prev_close = valid_closes[-2] if len(valid_closes) > 1 else current
+        prev_close = float(prev_close)
+        if not math.isfinite(current) or not math.isfinite(prev_close) or prev_close <= 0:
+            return None
+
+        change = current - prev_close
+        pct = change / prev_close * 100
         return {
             "symbol": symbol,
-            "name":   info.get("longName") or info.get("shortName", symbol),
+            "name":   meta.get("longName") or meta.get("shortName") or symbol,
             "price":  safe_round(current),
             "change": safe_round(change),
             "pct":    safe_round(pct),
-            "sector": info.get("sector") or info.get("industry", "—"),
-            "mktCap": format_large(info.get("marketCap")),
-            "pe":     safe_round(info.get("trailingPE")) if info.get("trailingPE") else "N/A",
-            "vol":    format_large(info.get("averageVolume")),
+            "sector": "—",
+            "mktCap": "N/A",
+            "pe":     "N/A",
+            "vol":    format_large(meta.get("averageDailyVolume3Month")),
         }
-    except Exception as e:
+    except (req.RequestException, ValueError, TypeError) as e:
         print(f"  [!] Error fetching {symbol}: {e}")
         return None
 
