@@ -46,7 +46,7 @@ export default function MarketOverview({ dark }) {
     setLoading(true);
     try {
       const [idxRes, secRes, stkRes] = await Promise.all([
-        apiFetch(`${API}/stocks?symbols=${INDEX_SYMBOLS.map(i => i.symbol).join(",")}`),
+        apiFetch(`${API}/stocks?symbols=${INDEX_SYMBOLS.map(i => i.symbol).join(",")}&refresh=${Date.now()}`),
         apiFetch(`${API}/stocks?symbols=${SECTOR_ETFS.map(s => s.symbol).join(",")}`),
         apiFetch(`${API}/stocks?symbols=${POPULAR_STOCKS.join(",")}`),
       ]);
@@ -105,7 +105,7 @@ export default function MarketOverview({ dark }) {
                       <span style={{ fontSize: 10, color: "var(--text3)" }}>({data.pct >= 0 ? "+" : ""}{data.change?.toFixed(2)})</span>
                     </div>
                   </>
-                ) : <div className="skeleton" style={{ height: 28, width: "80%" }} />}
+                ) : <div style={{ fontFamily: "var(--mono)", fontSize: 14, color: "var(--text3)" }}>Quote unavailable</div>}
               </GlassPanel>
             );
           })}

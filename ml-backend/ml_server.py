@@ -312,7 +312,7 @@ class GRUModel(nn.Module):
 
 # ── Directional Loss ─────────────────────────────────────────────
 class DirectionalLoss(nn.Module):
-    def __init__(self, dw=2.0, delta=0.01):
+    def __init__(self, dw=3.5, delta=0.01):
         super().__init__()
         self.dw    = dw
         self.huber = nn.HuberLoss(delta=delta, reduction='none')
@@ -342,17 +342,17 @@ def normalise(f):
 
 def build_dataset(fn, close, augment=True):
     X, Y = [], []
-    for i in range(SEQ_LEN, len(fn) - HORIZON):
-        x   = fn[i-SEQ_LEN:i]
-        ret = (close[i:i+HORIZON] - close[i]) / (close[i]+1e-9)
+    for i in range(SEQ_LEN - 1, len(fn) - HORIZON - 1):
+        x   = fn[i - SEQ_LEN + 1 : i + 1]
+        ret = (close[i+1 : i+1+HORIZON] - close[i]) / (close[i] + 1e-9)
         X.append(x); Y.append(ret)
         if augment and np.random.rand() < 0.4:
-            X.append(x + np.random.normal(0, 0.004, x.shape).astype(np.float32))
+            X.append(x + np.random.normal(0, 0.003, x.shape).astype(np.float32))
             Y.append(ret)
     return np.array(X, dtype=np.float32), np.array(Y, dtype=np.float32)
 
 
-def train_one(ModelCls, Xt, yt, Xv, yv, epochs=80, lr=3e-4, **kw):
+def train_one(ModelCls, Xt, yt, Xv, yv, epochs=20, lr=3e-4, **kw):
     m   = ModelCls(**kw).to(DEVICE)
     opt = torch.optim.AdamW(m.parameters(), lr=lr, weight_decay=1e-4)
     n_steps = epochs * math.ceil(len(Xt) / 32)
@@ -366,12 +366,12 @@ def train_one(ModelCls, Xt, yt, Xv, yv, epochs=80, lr=3e-4, **kw):
     Xvt = torch.tensor(Xv).to(DEVICE)
     yvt = torch.tensor(yv).to(DEVICE)
 
-    best, patience, wait, bs = 1e9, 12, 0, None
+    best, patience, wait, bs = 1e9, 5, 0, None
     for ep in range(epochs):
         m.train()
         for xb, yb in ldr:
             xb, yb = xb.to(DEVICE), yb.to(DEVICE)
-            opt.zero_grad()
+            opt.zero_grad(set_to_none=True)
             if USE_AMP:
                 with torch.cuda.amp.autocast():
                     loss = lf(m(xb), yb)
@@ -398,15 +398,37 @@ def train_one(ModelCls, Xt, yt, Xv, yv, epochs=80, lr=3e-4, **kw):
     return m
 
 
-def train_ensemble(features, close, epochs=80):
-    fn, mu, sd = normalise(features)
-    X, Y = build_dataset(fn, close, augment=True)
-    if len(X) < 60:
-        return None, mu, sd
-    sp = int(len(X)*0.8)
-    Xt, Xv = X[:sp], X[sp:]
-    yt, yv  = Y[:sp], Y[sp:]
-    print(f"  [Train] {len(Xt)} train | {len(Xv)} val | device={DEVICE}")
+def train_ensemble(features, close, epochs=20):
+    sample_count = len(features) - SEQ_LEN - HORIZON
+    if sample_count < 200:
+        _, mu, sd = normalise(features)
+        return None, mu, sd, None
+
+    early_stop_cut = int(sample_count * 0.70)
+    calibration_cut = int(sample_count * 0.85)
+    train_end = early_stop_cut - HORIZON
+    validation_end = calibration_cut - HORIZON
+    if train_end < 60 or validation_end <= early_stop_cut or sample_count - calibration_cut < 30:
+        _, mu, sd = normalise(features)
+        return None, mu, sd, None
+
+    norm_end = SEQ_LEN + train_end - 1
+    _, mu, sd = normalise(features[:norm_end])
+    fn = (features - mu) / sd
+    X, Y = build_dataset(fn, close, augment=False)
+    Xt, yt = X[:train_end], Y[:train_end]
+    Xv, yv = X[early_stop_cut:validation_end], Y[early_stop_cut:validation_end]
+    Xc, yc = X[calibration_cut::HORIZON], Y[calibration_cut::HORIZON]
+
+    augment_mask = np.random.rand(len(Xt)) < 0.4
+    if augment_mask.any():
+        augmented = Xt[augment_mask] + np.random.normal(
+            0, 0.003, Xt[augment_mask].shape
+        ).astype(np.float32)
+        Xt = np.concatenate((Xt, augmented))
+        yt = np.concatenate((yt, yt[augment_mask]))
+
+    print(f"  [Train] {len(Xt)} train | {len(Xv)} early-stop | {len(Xc)} holdout | device={DEVICE}")
     kw = dict(epochs=epochs, lr=3e-4)
     models = {
         "transformer": train_one(TransformerModel, Xt, yt, Xv, yv,
@@ -416,7 +438,20 @@ def train_ensemble(features, close, epochs=80):
         "gru":         train_one(GRUModel, Xt, yt, Xv, yv,
                                   n_feat=N_FEAT, hidden=128, layers=3, drop=0.15, **kw),
     }
-    return models, mu, sd
+
+    calibration_x = torch.tensor(Xc, dtype=torch.float32).to(DEVICE)
+    calibration_predictions = []
+    for model in models.values():
+        model.eval()
+        with torch.no_grad():
+            calibration_predictions.append(model(calibration_x).cpu().numpy())
+    mean_prediction = np.mean(calibration_predictions, axis=0)
+    calibration_accuracy = float(
+        np.mean((mean_prediction[:, -1] > 0) == (yc[:, -1] > 0))
+    )
+    validation = {"accuracy": calibration_accuracy, "samples": len(yc)}
+    print(f"  [Holdout] 14d directional accuracy={calibration_accuracy * 100:.1f}%")
+    return models, mu, sd, validation
 
 
 # ── Regime detection ─────────────────────────────────────────────
@@ -431,7 +466,30 @@ def detect_regime(close, w=20):
 
 
 # ── Ensemble inference ───────────────────────────────────────────
-def ensemble_predict(models, features, mu, sd, current_price, close):
+MIN_VALIDATION_ACCURACY = 0.60
+MIN_VALIDATION_SAMPLES = 8
+MIN_MODEL_AGREEMENT = 2 / 3
+
+
+def classify_signal(delta, regime, agreement, validation_accuracy, validation_samples):
+    if (validation_accuracy is None
+            or validation_accuracy < MIN_VALIDATION_ACCURACY
+            or validation_samples < MIN_VALIDATION_SAMPLES):
+        return "HOLD"
+    if agreement < MIN_MODEL_AGREEMENT:
+        return "HOLD"
+
+    if delta > 8: signal = "STRONG BUY"
+    elif delta > 2.5: signal = "BUY"
+    elif delta > -2.5: signal = "HOLD"
+    elif delta > -8: signal = "SELL"
+    else: signal = "STRONG SELL"
+    if regime == "sideways" and signal in ("BUY", "SELL") and abs(delta) < 4:
+        signal = "HOLD"
+    return signal
+
+
+def ensemble_predict(models, features, mu, sd, current_price, close, validation):
     fn  = (features - mu) / sd
     x   = torch.tensor(fn[-SEQ_LEN:][np.newaxis], dtype=torch.float32).to(DEVICE)
     rets, confs = [], []
@@ -439,14 +497,15 @@ def ensemble_predict(models, features, mu, sd, current_price, close):
         with torch.no_grad():
             r = model(x).cpu().numpy()[0]
         mc_m, mc_s = mc_predict(model, x)
-        confs.append(1.0 / (float(mc_s[0,0].cpu())+1e-4))
+        std_val = float(mc_s[0, 0].cpu())
+        confs.append(1.0 / (std_val + 1e-4))
         rets.append(r)
     tw  = sum(confs)
     avg = sum(c/tw * r for c, r in zip(confs, rets))
 
     regime = detect_regime(close)
-    if regime == "bull": avg *= 1.04
-    elif regime == "bear": avg *= 0.96
+    if regime == "bull": avg *= 1.02
+    elif regime == "bear": avg *= 0.98
 
     prices = current_price * (1 + avg)
     from datetime import datetime, timedelta
@@ -455,18 +514,20 @@ def ensemble_predict(models, features, mu, sd, current_price, close):
     target = float(prices[-1])
     delta  = round((target - current_price)/current_price*100, 2)
 
-    if   delta >  8: signal = "STRONG BUY"
-    elif delta >  3: signal = "BUY"
-    elif delta > -3: signal = "HOLD"
-    elif delta > -8: signal = "SELL"
-    else:            signal = "STRONG SELL"
-    if regime == "sideways" and signal in ("BUY","SELL"): signal = "HOLD"
+    horizon_signs = [np.sign(r[-1]) for r in rets]
+    agreement = abs(sum(horizon_signs)) / max(len(horizon_signs), 1)
+    signal = classify_signal(
+        delta, regime, agreement, validation["accuracy"], validation["samples"]
+    )
+    confidence = round(validation["accuracy"] * 100, 1)
 
     return {
         "signal":      signal,
         "targetPrice": round(target, 2),
         "deltaPct":    delta,
-        "confidence":  round(min(99, float(np.mean(confs))*8), 1),
+        "confidence":  confidence,
+        "validationAccuracy": confidence,
+        "validationSamples": validation["samples"],
         "regime":      regime,
         "forecast":    forecast,
         "model":       f"Ensemble (Transformer+TCN+GRU · {str(DEVICE).upper()})",
@@ -560,8 +621,8 @@ def walk_forward_backtest(features, close, n_test=30,
     fn_full = (features - mu) / sd                        # (T, F)
 
     # ── Build ALL test windows in one shot ───────────────────────────────────
-    indices = np.arange(train_end, n - HORIZON)           # test start indices
-    windows = np.stack([fn_full[i - SEQ_LEN: i]
+    indices = np.arange(train_end, n - HORIZON - 1)       # test start indices
+    windows = np.stack([fn_full[i - SEQ_LEN + 1 : i + 1]
                         for i in indices])                 # (N, SEQ_LEN, F)
     batch   = torch.tensor(windows,
                            dtype=torch.float32).to(DEVICE) # single GPU alloc
@@ -579,7 +640,7 @@ def walk_forward_backtest(features, close, n_test=30,
     # ── Vectorised metric computation ────────────────────────────────────────
     pred_ret   = avg_rets[:, 0]                            # next-day return
     pred_px    = close[indices] * (1 + pred_ret)
-    actual_px  = close[np.minimum(indices + 1, n - 1)]
+    actual_px  = close[indices + 1]
     actual_ret = (actual_px - close[indices]) / (close[indices] + 1e-9)
 
     correct_dir = (pred_ret > 0) == (actual_ret > 0)      # bool (N,)
@@ -726,6 +787,10 @@ def walk_forward_backtest(features, close, n_test=30,
 
 def sanitize_for_json(obj):
     """Replace NaN/Inf floats with None so JSON serialisation succeeds."""
+    if isinstance(obj, np.generic):
+        return sanitize_for_json(obj.item())
+    if isinstance(obj, np.ndarray):
+        return sanitize_for_json(obj.tolist())
     if isinstance(obj, float):
         return None if (math.isnan(obj) or math.isinf(obj)) else obj
     if isinstance(obj, dict):
@@ -735,7 +800,7 @@ def sanitize_for_json(obj):
     return obj
 
 
-_cache          = {}   # symbol → (models, mu, sd, close)
+_cache          = {}   # symbol → (models, mu, sd, close, validation)
 _backtest_cache = {}   # (symbol, n_test) → (result_dict, timestamp)
 _lock           = threading.Lock()
 
@@ -747,8 +812,8 @@ def get_or_train(symbol, hist):
         if symbol in _cache: return _cache[symbol]
     features, close = build_features(hist)
     print(f"[ML] Training ensemble for {symbol}  ({len(hist)} bars)  device={DEVICE}")
-    models, mu, sd = train_ensemble(features, close, epochs=80)
-    entry = (models, mu, sd, close)
+    models, mu, sd, validation = train_ensemble(features, close, epochs=20)
+    entry = (models, mu, sd, close, validation)
     with _lock:
         _cache[symbol] = entry
     return entry
@@ -771,11 +836,13 @@ def predict(symbol):
             hist = hist.dropna(subset=["Close"])
         if hist.empty or len(hist) < SEQ_LEN + 10:
             return jsonify({"error": f"Insufficient data for {symbol}"}), 404
-        models, mu, sd, _ = get_or_train(symbol, hist)
+        models, mu, sd, _, validation = get_or_train(symbol, hist)
         if models is None:
             return jsonify({"error": "Not enough data to train"}), 422
         features, close = build_features(hist)
-        result = ensemble_predict(models, features, mu, sd, float(close[-1]), close)
+        result = ensemble_predict(
+            models, features, mu, sd, float(close[-1]), close, validation
+        )
         result["symbol"] = symbol
         return jsonify(sanitize_for_json(result))
     except Exception as e:
@@ -812,23 +879,18 @@ def backtest():
             return jsonify({"error": f"Insufficient history for {symbol}"}), 404
 
         features, close = build_features(hist)
+        max_test = len(close) - SEQ_LEN - HORIZON - 50
+        n_test = min(n_test, max_test)
+        if n_test <= 0:
+            return jsonify({"error": "Not enough history for out-of-sample testing"}), 422
+
+        train_end = len(close) - n_test
         print(f"[ML] Backtest {symbol}  {n_test}d  device={DEVICE}")
-
-        # ── 2. Reuse trained models from predict cache if available ──────────
-        with _lock:
-            cached_model = _cache.get(symbol)
-
-        if cached_model:
-            models, mu, sd, _ = cached_model
-            print(f"[ML] Reusing trained models for {symbol} from predict cache [OK]")
-        else:
-            # No cached model — train fresh and store so /predict is also fast
-            print(f"[ML] No cached model for {symbol}, training now…")
-            models, mu, sd = train_ensemble(features, close, epochs=50)
-            if models is None:
-                return jsonify({"error": "Not enough data to train"}), 422
-            with _lock:
-                _cache[symbol] = (models, mu, sd, close)
+        models, mu, sd, validation = train_ensemble(
+            features[:train_end], close[:train_end], epochs=20
+        )
+        if models is None:
+            return jsonify({"error": "Not enough data to train"}), 422
 
         results = walk_forward_backtest(
             features, close, n_test=n_test,
@@ -836,6 +898,7 @@ def backtest():
         )
 
         results["ticker"] = symbol
+        results["validationAccuracy"] = round(validation["accuracy"] * 100, 1)
         results["cached"] = False
         print(f"[ML] Acc={results.get('directionalAccuracy')}%  "
               f"Sharpe={results.get('sharpe')}  Grade={results.get('grade')}")

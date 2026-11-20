@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 import os
 import bcrypt
 import jwt
+from pymongo import MongoClient
+from pymongo.errors import DuplicateKeyError
 
 from shared_app import app
 
@@ -20,32 +22,64 @@ except ImportError:
 
 # ── JWT configuration from environment ───────────────────────────
 JWT_SECRET = os.getenv("JWT_SECRET")
-if not JWT_SECRET:
+if not JWT_SECRET or len(JWT_SECRET) < 32:
     raise RuntimeError(
-        "[auth] FATAL: JWT_SECRET environment variable is not set. "
-        "Add a long random string to your .env file."
+        "[auth] FATAL: JWT_SECRET must be set to a random value of at least 32 characters."
     )
 JWT_EXPIRY = 24  # hours
 
 # ── In-memory user store (passwords stored as bcrypt hashes) ─────
-# Default admin accounts — loaded from env so passwords aren't hardcoded.
-_default_admin_pw = os.getenv("ADMIN_PASSWORD", "")
-_default_user_pw  = os.getenv("USER_PASSWORD", "")
+def _required_password(name: str) -> str:
+    password = os.getenv(name)
+    if not password or len(password) < 12:
+        raise RuntimeError(f"[auth] FATAL: {name} must be set to at least 12 characters.")
+    if len(password.encode("utf-8")) > 72:
+        raise RuntimeError(f"[auth] FATAL: {name} must not exceed bcrypt's 72-byte limit.")
+    return password
+
+
+_admin_password = _required_password("ADMIN_PASSWORD")
 
 USERS: dict[str, dict] = {}
+_user_collection = None
+
+mongo_uri = os.getenv("MONGO_URI")
+if mongo_uri:
+    _mongo_client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+    _mongo_client.admin.command("ping")
+    _user_collection = _mongo_client.get_database("quantdesk")["users"]
+    _user_collection.create_index("email", unique=True)
 
 def _seed_default_users():
-    """Seed default accounts from environment variables (not hardcoded)."""
-    admin_email = os.getenv("ADMIN_EMAIL", "admin@quantdesk.com")
-    user_email  = os.getenv("USER_EMAIL",  "karthik@quantdesk.com")
+    """Seed only the configured admin; regular accounts are created by registration."""
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@quantdesk.com").strip().lower()
+    admin_hash = bcrypt.hashpw(_admin_password.encode(), bcrypt.gensalt())
+    admin = {"email": admin_email, "password_hash": admin_hash, "name": "Admin"}
+    if _user_collection is not None:
+        _user_collection.update_one(
+            {"email": admin_email}, {"$set": admin}, upsert=True
+        )
+    else:
+        USERS[admin_email] = admin
 
-    if _default_admin_pw:
-        hashed = bcrypt.hashpw(_default_admin_pw.encode(), bcrypt.gensalt())
-        USERS[admin_email] = {"password_hash": hashed, "name": "Admin"}
 
-    if _default_user_pw:
-        hashed = bcrypt.hashpw(_default_user_pw.encode(), bcrypt.gensalt())
-        USERS[user_email] = {"password_hash": hashed, "name": "Karthik"}
+def _find_user(email: str):
+    if _user_collection is not None:
+        return _user_collection.find_one({"email": email})
+    return USERS.get(email)
+
+
+def _create_user(user: dict) -> bool:
+    if _user_collection is not None:
+        try:
+            _user_collection.insert_one(user)
+            return True
+        except DuplicateKeyError:
+            return False
+    if user["email"] in USERS:
+        return False
+    USERS[user["email"]] = user
+    return True
 
 _seed_default_users()
 
@@ -69,7 +103,7 @@ def _login_route():
     if not email or not password:
         return jsonify({"error": "Email and password are required"}), 400
 
-    user = USERS.get(email)
+    user = _find_user(email)
     # Use bcrypt.checkpw for constant-time comparison — prevents timing attacks
     if not user or not bcrypt.checkpw(password.encode(), user["password_hash"]):
         return jsonify({"error": "Invalid email or password"}), 401
@@ -101,16 +135,14 @@ def _register_route():
     email    = body.get("email", "").strip().lower()
     password = body.get("password", "")
 
-    if not name or not email or not password:
+    if not name or not email or not isinstance(password, str) or not password:
         return jsonify({"error": "Name, email and password are required"}), 400
-    if len(password) < 8:
-        return jsonify({"error": "Password must be at least 8 characters"}), 400
-    if email in USERS:
-        return jsonify({"error": "Email already registered"}), 409
-
+    if len(password) < 12 or len(password.encode("utf-8")) > 72:
+        return jsonify({"error": "Password must be 12-72 UTF-8 bytes"}), 400
     # Hash password with bcrypt before storing
     hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-    USERS[email] = {"password_hash": hashed, "name": name}
+    if not _create_user({"email": email, "password_hash": hashed, "name": name}):
+        return jsonify({"error": "Email already registered"}), 409
     token = generate_token(email, name)
     print(f"[auth] Registered: {email}")
 
@@ -153,7 +185,11 @@ def auth_health():
         "status":         "ok",
         "mode":           "bcrypt + JWT",
         "rate_limiting":  RATE_LIMITING,
-        "users_loaded":   len(USERS),
+        "persistent_users": _user_collection is not None,
+        "users_loaded": (
+            _user_collection.count_documents({})
+            if _user_collection is not None else len(USERS)
+        ),
     })
 
 
@@ -162,7 +198,7 @@ if __name__ == "__main__":
     print("  QuantDesk Auth Server")
     print(f"  JWT Secret  : {'[OK] Set' if JWT_SECRET else '[X] MISSING!'}")
     print(f"  Rate Limit  : {'[OK] Active' if RATE_LIMITING else '[!] Disabled'}")
-    print(f"  Users loaded: {len(USERS)}")
+    print(f"  Persistent users: {_user_collection is not None}")
     print("  http://127.0.0.1:5003")
     print("=" * 52)
     app.run(debug=False, port=5003, host="0.0.0.0")

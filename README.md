@@ -7,11 +7,11 @@ QuantDesk is a full-stack, intelligent stock market analysis dashboard with real
 ## 🚀 Key Features
 
 - **Live Stock Data**: Parallelized fetching of stock metrics using yfinance.
-- **ML Price Forecasting**: 14-day future stock price predictions using a Transformer Neural Network with BUY/HOLD/SELL signals.
+- **ML Price Forecasting**: 14-day future stock price estimates using a Transformer Neural Network. BUY/SELL signals require ensemble agreement, at least 60% directional accuracy across non-overlapping 14-day holdout samples, and at least 8 holdout samples; otherwise the signal is HOLD. The 14D/30D/60D/90D controls change chart history, not the forecast horizon. Forecasts are estimates, not guaranteed outcomes.
 - **AI Analyst Chat**: Interactive chat assistant utilizing Anthropic Claude (with Groq LLM fallback) for custom stock queries.
 - **Unified Server Orchestrator**: Runs the Flask application and routes (Stock data, AI Chat, Auth, and ML models) on a single port (5000) while serving the compiled React frontend static bundle.
 - **Cloudflare Tunnel Sharing**: Built-in option (`--share`) to bypass firewalls and make the app instantly accessible globally on mobile or other devices.
-- **User Authentication**: Secure user accounts powered by MongoDB Atlas, bcrypt password hashing, and JWT session handling.
+- **User Authentication**: Admin access is configured through environment secrets; regular users register themselves. Passwords use bcrypt and sessions use JWT, with optional MongoDB persistence.
 
 ---
 
@@ -66,7 +66,8 @@ cd QUANTDESK_FINAL
 Create a `.env` file in the root directory and add your credentials:
 ```env
 MONGO_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/quantdesk
-JWT_SECRET=your_jwt_secret_key_here
+JWT_SECRET=<random secret of at least 32 characters>
+ADMIN_PASSWORD=<at least 12 characters>
 ANTHROPIC_API_KEY=your_anthropic_api_key
 GROQ_API_KEY=your_groq_api_key
 ```
@@ -100,7 +101,7 @@ QuantDesk is fully compatible with Render's web hosting. The repository includes
 
 1. Connect your repository to **Render**.
 2. Deploy using the `render.yaml` configuration.
-3. Configure the environment variables (`MONGO_URI`, `JWT_SECRET`, `ANTHROPIC_API_KEY`, etc.) in the Render dashboard.
+3. Configure `JWT_SECRET` (random, at least 32 characters) and `ADMIN_PASSWORD` (at least 12 characters) in the Render dashboard. The admin email defaults to `admin@quantdesk.com`; regular users create their own accounts through registration. Set `MONGO_URI` to persist registered accounts across restarts. Without MongoDB, accounts are stored in memory and will be lost when the service restarts. The app refuses to start with missing or weak auth secrets and does not provide default login passwords.
 
 ---
 

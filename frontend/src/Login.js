@@ -30,6 +30,22 @@ const styles = `
     background: #020d0c;
   }
 
+  @media (max-width: 768px) {
+    .lg-root {
+      padding:
+        calc(12px + env(safe-area-inset-top, 0px))
+        calc(12px + env(safe-area-inset-right, 0px))
+        calc(38px + env(safe-area-inset-bottom, 0px))
+        calc(12px + env(safe-area-inset-left, 0px));
+      overflow-y: auto;
+    }
+    .lg-card { width: min(400px, 100%); }
+    .lg-header { padding: 24px 20px 18px; }
+    .lg-body { padding: 22px 20px; }
+    .lg-footer { padding: 12px 20px; }
+    .lg-ticker { bottom: env(safe-area-inset-bottom, 0px); }
+  }
+
   /* ── VIDEO BACKDROP ── */
   .lg-video-bg {
     position: absolute;
@@ -377,7 +393,7 @@ export default function Login({ onLogin, dark, toggleTheme }) {
     if (!email.trim()) errs.email = "Email is required";
     else if (!/^[\w.-]+@[\w.-]+\.\w{2,}$/.test(email)) errs.email = "Invalid email address";
     if (!password) errs.password = "Password is required";
-    else if (mode === "register" && password.length < 6) errs.password = "Minimum 6 characters";
+    else if (mode === "register" && password.length < 12) errs.password = "Minimum 12 characters";
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -457,7 +473,7 @@ export default function Login({ onLogin, dark, toggleTheme }) {
                   <input
                     className={`lg-input ${fieldErrors.password ? "has-error" : ""}`}
                     type={showPass ? "text" : "password"}
-                    placeholder={mode === "register" ? "Min 6 characters" : "••••••••"}
+                    placeholder={mode === "register" ? "Min 12 characters" : "••••••••"}
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     style={{ paddingRight: 58 }}

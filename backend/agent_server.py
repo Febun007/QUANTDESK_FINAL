@@ -35,8 +35,8 @@ threading.Thread(target=keep_alive, daemon=True).start()
 # ── API keys loaded from environment ONLY — never hardcoded ──────
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY")
 GROQ_KEY      = os.getenv("GROQ_API_KEY")
-CLAUDE_MODEL  = "claude-sonnet-4-20250514"
-GROQ_MODEL    = "llama-3.3-70b-versatile"
+CLAUDE_MODEL  = "claude-3-5-sonnet-20241022"
+GROQ_MODELS   = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
 
 if not ANTHROPIC_KEY:
     print("[agent] WARNING: ANTHROPIC_API_KEY not set — Claude will be unavailable")
@@ -154,27 +154,38 @@ def ask_groq(system: str, messages: list, max_tokens: int = 1500):
     """Returns (text, success)"""
     if not GROQ_KEY:
         return "⚠ No AI available. Add GROQ_API_KEY to .env — free at console.groq.com", False
-    try:
-        groq_messages = [{"role": "system", "content": system}] + messages
-        response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Content-Type":  "application/json",
-                "Authorization": f"Bearer {GROQ_KEY}",
-            },
-            json={
-                "model":       GROQ_MODEL,
-                "max_tokens":  max_tokens,
-                "messages":    groq_messages,
-                "temperature": 0.7,
-            },
-            timeout=30
-        )
-        if response.status_code == 200:
-            return response.json()["choices"][0]["message"]["content"], True
-        return f"Groq error {response.status_code}: {response.text}", False
-    except Exception as e:
-        return f"Request failed: {str(e)}", False
+
+    groq_messages = [{"role": "system", "content": system}] + messages
+    last_err = "No response from Groq"
+
+    for model_name in GROQ_MODELS:
+        try:
+            response = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Content-Type":  "application/json",
+                    "Authorization": f"Bearer {GROQ_KEY}",
+                },
+                json={
+                    "model":       model_name,
+                    "max_tokens":  max_tokens,
+                    "messages":    groq_messages,
+                    "temperature": 0.7,
+                },
+                timeout=30
+            )
+            if response.status_code == 200:
+                content = response.json()["choices"][0]["message"]["content"]
+                if content and content.strip():
+                    print(f"[agent] [OK] Groq responded using model: {model_name}")
+                    return content, True
+            last_err = f"Groq ({model_name}) error {response.status_code}: {response.text}"
+            print(f"[agent] Warning: {model_name} failed ({response.status_code}), trying next fallback...")
+        except Exception as e:
+            last_err = f"Groq ({model_name}) request failed: {str(e)}"
+            print(f"[agent] Warning: {last_err}, trying next fallback...")
+
+    return last_err, False
 
 
 # ── Smart AI router ───────────────────────────────────────────────

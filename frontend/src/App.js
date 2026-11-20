@@ -398,6 +398,33 @@ const GlobalStyles = ({ dark }) => (
       .topbar-wrapper {
         padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 8px !important;
       }
+      .app-viewport {
+        padding-left: env(safe-area-inset-left, 0px);
+        padding-right: env(safe-area-inset-right, 0px);
+      }
+      .dashboard-grid {
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overscroll-behavior-y: contain;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+      }
+      .dashboard-grid > .sidebar-panel,
+      .dashboard-grid > .chart-panel,
+      .dashboard-grid > .chat-panel {
+        flex: 0 0 auto;
+      }
+      .chart-panel {
+        height: auto !important;
+        min-height: 700px !important;
+      }
+      .chart-panel > div:last-child {
+        flex: 0 0 280px !important;
+        height: 280px !important;
+        min-height: 280px !important;
+      }
     }
   `}</style>
 );
@@ -489,7 +516,7 @@ const StatBox = ({ label, value, sub, accent, loading }) => (
 /* ─────────────────────────────────────────────────────────────────────────────
    TOOLTIP
 ───────────────────────────────────────────────────────────────────────────── */
-const CustomTooltip = ({ active, payload, currencySymbol = "$" }) => {
+const CustomTooltip = ({ active, payload, currencySymbol = "$", dark = false }) => {
   if (!active || !payload?.length) return null;
   const item = payload[0]?.payload || {};
   const priceItem = payload.find(p => p.dataKey === "price");
@@ -498,8 +525,8 @@ const CustomTooltip = ({ active, payload, currencySymbol = "$" }) => {
   const predVal = predItem && predItem.value !== null && predItem.value !== undefined ? parseFloat(predItem.value) : NaN;
 
   return (
-    <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.9)", borderRadius: 12, padding: "10px 14px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}>
-      <div style={{ color: "var(--text2)", fontSize: 11, marginBottom: 4, fontWeight: 500 }}>{item.date}</div>
+    <div style={{ background: dark ? "rgba(17,26,46,0.96)" : "rgba(255,255,255,0.9)", backdropFilter: "blur(16px)", border: `1px solid ${dark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.10)"}`, borderRadius: 12, padding: "10px 14px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}>
+      <div style={{ color: dark ? "rgba(255,255,255,0.82)" : "rgba(10,14,30,0.72)", fontSize: 11, marginBottom: 4, fontWeight: 500 }}>{item.date}</div>
       {!isNaN(priceVal) && (
         <div style={{ color: "var(--gold)", fontSize: 13, fontWeight: 700, fontFamily: "var(--mono)" }}>
           {currencySymbol}{priceVal.toFixed(2)}
@@ -510,7 +537,7 @@ const CustomTooltip = ({ active, payload, currencySymbol = "$" }) => {
           Forecast: {currencySymbol}{predVal.toFixed(2)}
         </div>
       )}
-      {item.volume && <div style={{ color: "var(--text3)", fontSize: 11, marginTop: 2, fontFamily: "var(--mono)" }}>Vol: {(item.volume / 1e6).toFixed(1)}M</div>}
+      {item.volume && <div style={{ color: dark ? "rgba(255,255,255,0.58)" : "rgba(10,14,30,0.52)", fontSize: 11, marginTop: 2, fontFamily: "var(--mono)" }}>Vol: {(item.volume / 1e6).toFixed(1)}M</div>}
     </div>
   );
 };
@@ -1358,7 +1385,7 @@ function App({ user, onLogout, dark, toggleTheme }) {
                         <>
                           <StatBox label="DL Signal" value={mlPrediction.signal}
                             accent={mlPrediction.signal.includes("BUY") ? "var(--green)" : mlPrediction.signal === "HOLD" ? "var(--gold)" : "var(--red)"}
-                            sub="Transformer" />
+                            sub={`14d holdout ${mlPrediction.validationAccuracy}% · ${mlPrediction.validationSamples} samples`} />
                           <StatBox label="14d Target" value={`${currencySymbol}${mlPrediction.targetPrice}`}
                             accent={mlPrediction.deltaPct >= 0 ? "var(--green)" : "var(--red)"}
                             sub={`${mlPrediction.deltaPct >= 0 ? "+" : ""}${mlPrediction.deltaPct}%`} />
@@ -1374,6 +1401,7 @@ function App({ user, onLogout, dark, toggleTheme }) {
 
                     {/* Controls */}
                     <div style={{ display: "flex", gap: 6, padding: "0 16px 12px", alignItems: "center", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>History</span>
                       {[14, 30, 60, 90].map(d => (
                         <button key={d} onClick={() => setTimeRange(d)}
                           style={{ padding: "5px 14px", background: timeRange === d ? "linear-gradient(135deg,#E8A020,#FFB84D)" : "var(--glass)", backdropFilter: "blur(8px)", color: timeRange === d ? "#fff" : "var(--text2)", border: `1px solid ${timeRange === d ? "transparent" : "var(--glass-border)"}`, borderRadius: 20, fontSize: 11, fontWeight: 600, boxShadow: timeRange === d ? "0 4px 12px rgba(232,160,32,0.25)" : "var(--panel-shadow)", transition: "all 0.2s" }}>
@@ -1407,10 +1435,10 @@ function App({ user, onLogout, dark, toggleTheme }) {
                                 <stop offset="95%" stopColor="#30D158" stopOpacity={0} />
                               </linearGradient>
                             </defs>
-                            <CartesianGrid strokeDasharray="2 4" stroke="rgba(0,0,0,0.05)" vertical={false} />
-                            <XAxis dataKey="date" tick={{ fontFamily: "JetBrains Mono", fontSize: 9, fill: "rgba(20,20,30,0.35)" }} tickLine={false} axisLine={false} interval={Math.floor(chartData.length / 6)} />
-                            <YAxis domain={[minPrice - priceRange * 0.05, maxPrice + priceRange * 0.05]} tick={{ fontFamily: "JetBrains Mono", fontSize: 9, fill: "rgba(20,20,30,0.35)" }} tickLine={false} axisLine={false} tickFormatter={v => `${currencySymbol}${v.toFixed(0)}`} width={58} />
-                            <Tooltip content={<CustomTooltip currencySymbol={currencySymbol} />} />
+                            <CartesianGrid strokeDasharray="2 4" stroke={dark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)"} vertical={false} />
+                            <XAxis dataKey="date" tick={{ fontFamily: "JetBrains Mono", fontSize: 9, fill: dark ? "rgba(255,255,255,0.62)" : "rgba(20,20,30,0.60)" }} tickLine={false} axisLine={false} interval={Math.floor(chartData.length / 6)} />
+                            <YAxis domain={[minPrice - priceRange * 0.05, maxPrice + priceRange * 0.05]} tick={{ fontFamily: "JetBrains Mono", fontSize: 9, fill: dark ? "rgba(255,255,255,0.62)" : "rgba(20,20,30,0.60)" }} tickLine={false} axisLine={false} tickFormatter={v => `${currencySymbol}${v.toFixed(0)}`} width={58} />
+                            <Tooltip content={<CustomTooltip currencySymbol={currencySymbol} dark={dark} />} />
                             <Area dataKey="price" stroke="#E8A020" strokeWidth={2} fill="url(#goldGrad)" dot={false} activeDot={{ r: 4, fill: "#E8A020", strokeWidth: 0 }} connectNulls={false} />
                             {showForecast && <Area dataKey="predicted" stroke="#30D158" strokeWidth={2} strokeDasharray="5 3" fill="url(#greenGrad)" dot={false} activeDot={{ r: 4, fill: "#30D158", strokeWidth: 0 }} connectNulls={false} />}
                             {forecastStartDate && <ReferenceLine x={forecastStartDate} stroke="rgba(48,209,88,0.3)" strokeDasharray="3 3" label={{ value: "Forecast →", position: "top", fill: "#30D158", fontSize: 9 }} />}

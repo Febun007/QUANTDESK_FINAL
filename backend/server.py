@@ -75,8 +75,12 @@ def sanitize_for_json(obj):
     return obj
 
 def is_valid_symbol(s: str) -> bool:
-    """Accept only alphanumeric symbols with optional . or - (e.g. BRK.B, BF-B)."""
-    return bool(s) and len(s) <= 12 and all(c.isalnum() or c in ".-" for c in s)
+    """Accept common stock symbols and Yahoo index symbols with a leading ^."""
+    if not s or len(s) > 12:
+        return False
+    if s.startswith("^"):
+        return len(s) > 1 and s[1:].isalnum()
+    return all(c.isalnum() or c in ".-" for c in s)
 
 def fetch_one(symbol):
     try:
@@ -109,8 +113,8 @@ def fetch_one(symbol):
 
 # ── Routes ────────────────────────────────────────────────────────
 @app.route("/api/stocks")
-@cache.cached(timeout=300, query_string=True)
 @require_auth
+@cache.cached(timeout=300, query_string=True)
 def get_stocks():
     raw_symbols = request.args.get("symbols", ",".join(DEFAULT_SYMBOLS)).split(",")
     # Validate and cap input to prevent DoS
@@ -131,8 +135,8 @@ def get_stocks():
     return jsonify(sanitize_for_json(results))
 
 @app.route("/api/history/<symbol>")
-@cache.cached(timeout=600, query_string=True)
 @require_auth
+@cache.cached(timeout=600, query_string=True)
 def get_history(symbol):
     symbol = symbol.upper()
     if not is_valid_symbol(symbol):

@@ -12,7 +12,7 @@ services:
       gunicorn
       --pythonpath backend:ml-backend
       --bind 0.0.0.0:$PORT
-      --workers 2
+      --workers 1
       --timeout 300
       wsgi:app
     healthCheckPath: /api/health
@@ -25,12 +25,8 @@ services:
       - key: JWT_SECRET
         sync: false
       - key: ADMIN_EMAIL
-        sync: false
+        value: admin@quantdesk.com
       - key: ADMIN_PASSWORD
-        sync: false
-      - key: USER_EMAIL
-        sync: false
-      - key: USER_PASSWORD
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false
