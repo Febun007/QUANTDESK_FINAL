@@ -71,6 +71,7 @@ ADMIN_PASSWORD=<at least 12 characters>
 ANTHROPIC_API_KEY=your_anthropic_api_key
 GROQ_API_KEY=your_groq_api_key
 ```
+Keep credentials in the project-root `.env` or the hosting provider's backend environment settings. Never put secrets in `frontend/.env` or `REACT_APP_*` variables; Create React App embeds client variables in browser assets.
 
 ### 2. Run the Unified Application (Recommended)
 You can run the entire app (including APIs, ML models, and the frontend React bundle) using a single command:
