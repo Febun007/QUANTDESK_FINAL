@@ -24,11 +24,13 @@ Backtest v2 improvements:
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from collections import OrderedDict
 from pathlib import Path
 from dotenv import load_dotenv
-import numpy as np
 import os, threading, time, math, warnings
 warnings.filterwarnings("ignore")
+
+import numpy as np
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -46,6 +48,10 @@ app.register_blueprint(news_bp)
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+# Keep CPU training within Render's 512 MB instance limit.
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
 
 def get_device():
     if torch.cuda.is_available():
@@ -429,14 +435,23 @@ def train_ensemble(features, close, epochs=20):
         yt = np.concatenate((yt, yt[augment_mask]))
 
     print(f"  [Train] {len(Xt)} train | {len(Xv)} early-stop | {len(Xc)} holdout | device={DEVICE}")
+    if DEVICE.type == "cpu":
+        epochs = min(epochs, 8)
+        transformer_config = {"d": 64, "heads": 4, "layers": 2, "ff": 128}
+        tcn_config = {"ch": 64, "layers": 3}
+        gru_config = {"hidden": 64, "layers": 2}
+    else:
+        transformer_config = {"d": 128, "heads": 8, "layers": 4, "ff": 512}
+        tcn_config = {"ch": 128, "layers": 6}
+        gru_config = {"hidden": 128, "layers": 3}
     kw = dict(epochs=epochs, lr=3e-4)
     models = {
         "transformer": train_one(TransformerModel, Xt, yt, Xv, yv,
-                                  n_feat=N_FEAT, d=128, heads=8, layers=4, ff=512, drop=0.15, **kw),
+                                  n_feat=N_FEAT, drop=0.15, **transformer_config, **kw),
         "tcn":         train_one(TCNModel, Xt, yt, Xv, yv,
-                                  n_feat=N_FEAT, ch=128, layers=6, drop=0.15, **kw),
+                                  n_feat=N_FEAT, drop=0.15, **tcn_config, **kw),
         "gru":         train_one(GRUModel, Xt, yt, Xv, yv,
-                                  n_feat=N_FEAT, hidden=128, layers=3, drop=0.15, **kw),
+                                  n_feat=N_FEAT, drop=0.15, **gru_config, **kw),
     }
 
     calibration_x = torch.tensor(Xc, dtype=torch.float32).to(DEVICE)
@@ -496,7 +511,7 @@ def ensemble_predict(models, features, mu, sd, current_price, close, validation)
     for model in models.values():
         with torch.no_grad():
             r = model(x).cpu().numpy()[0]
-        mc_m, mc_s = mc_predict(model, x)
+        mc_m, mc_s = mc_predict(model, x, passes=5 if DEVICE.type == "cpu" else 15)
         std_val = float(mc_s[0, 0].cpu())
         confs.append(1.0 / (std_val + 1e-4))
         rets.append(r)
@@ -800,23 +815,27 @@ def sanitize_for_json(obj):
     return obj
 
 
-_cache          = {}   # symbol → (models, mu, sd, close, validation)
+_cache          = OrderedDict()   # symbol → (models, mu, sd, close, validation)
 _backtest_cache = {}   # (symbol, n_test) → (result_dict, timestamp)
 _lock           = threading.Lock()
 
 BACKTEST_TTL = 30 * 60  # 30 minutes
+MAX_CACHED_MODELS = 2
 
 
 def get_or_train(symbol, hist):
     with _lock:
-        if symbol in _cache: return _cache[symbol]
-    features, close = build_features(hist)
-    print(f"[ML] Training ensemble for {symbol}  ({len(hist)} bars)  device={DEVICE}")
-    models, mu, sd, validation = train_ensemble(features, close, epochs=20)
-    entry = (models, mu, sd, close, validation)
-    with _lock:
+        if symbol in _cache:
+            _cache.move_to_end(symbol)
+            return _cache[symbol]
+        features, close = build_features(hist)
+        print(f"[ML] Training ensemble for {symbol}  ({len(hist)} bars)  device={DEVICE}")
+        models, mu, sd, validation = train_ensemble(features, close, epochs=20)
+        entry = (models, mu, sd, close, validation)
         _cache[symbol] = entry
-    return entry
+        while len(_cache) > MAX_CACHED_MODELS:
+            _cache.popitem(last=False)
+        return entry
 
 
 # ═══════════════════════════════════════════════════════════════════
