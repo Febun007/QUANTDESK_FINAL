@@ -82,26 +82,132 @@ def is_valid_symbol(s: str) -> bool:
         return len(s) > 1 and s[1:].isalnum()
     return all(c.isalnum() or c in ".-" for c in s)
 
-def fetch_one(symbol):
+def _finite_number(value):
     try:
-        response = req.get(
-            f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
-            params={"range": "5d", "interval": "1d"},
-            headers={"User-Agent": "Mozilla/5.0 QuantDesk/1.0"},
-            timeout=8,
-        )
-        response.raise_for_status()
-        chart = response.json().get("chart", {})
-        results = chart.get("result") or []
-        if not results:
-            error = (chart.get("error") or {}).get("description", "provider returned no chart data")
-            print(f"  [!] No quote for {symbol}: {error}")
-            return None
+        number = float(value)
+        return number if math.isfinite(number) else None
+    except (TypeError, ValueError):
+        return None
 
-        result = results[0]
+def _fetch_chart_data(symbol):
+    response = req.get(
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
+        params={"range": "3mo", "interval": "1d"},
+        headers={"User-Agent": "Mozilla/5.0 QuantDesk/1.0"},
+        timeout=8,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise ValueError("provider returned invalid chart data")
+    chart = payload.get("chart")
+    if not isinstance(chart, dict):
+        chart = {}
+    results = chart.get("result") or []
+    if not results:
+        chart_error = chart.get("error")
+        error = chart_error.get("description", "provider returned no chart data") if isinstance(chart_error, dict) else "provider returned no chart data"
+        print(f"  [!] No quote for {symbol}: {error}")
+        return None
+
+    result = results[0]
+    if not isinstance(result, dict):
+        raise ValueError("provider returned invalid chart data")
+    meta = result.get("meta") or {}
+    if not isinstance(meta, dict):
+        meta = {}
+    indicators = result.get("indicators") or {}
+    if not isinstance(indicators, dict):
+        indicators = {}
+    quote_rows = indicators.get("quote") or []
+    quote = quote_rows[0] if quote_rows else {}
+    if not isinstance(quote, dict):
+        quote = {}
+    closes = quote.get("close") or []
+    volumes = quote.get("volume") or []
+    return meta, closes, volumes
+
+def _latest_timeseries_value(results, metric):
+    values = []
+    for result in results:
+        if not isinstance(result, dict):
+            continue
         meta = result.get("meta") or {}
-        quote_rows = (result.get("indicators") or {}).get("quote") or []
-        closes = quote_rows[0].get("close", []) if quote_rows else []
+        if not isinstance(meta, dict):
+            continue
+        metric_types = meta.get("type") or []
+        if isinstance(metric_types, str):
+            metric_types = [metric_types]
+        if metric not in metric_types:
+            continue
+        for point in result.get(metric) or []:
+            if not isinstance(point, dict):
+                continue
+            raw_value = (point.get("reportedValue") or {}).get("raw")
+            value = _finite_number(raw_value)
+            if value is not None:
+                values.append((point.get("asOfDate") or "", value))
+    if not values:
+        return None, None
+    as_of_date, value = max(values, key=lambda item: item[0])
+    return value, as_of_date
+
+def _fetch_fundamentals(symbol):
+    period2 = int(time.time()) + 86400
+    response = req.get(
+        f"https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/{symbol}",
+        params={
+            "symbol": symbol,
+            "type": "trailingMarketCap,trailingPeRatio,trailingNetIncome,quarterlyOrdinarySharesNumber,annualOrdinarySharesNumber",
+            "merge": "false",
+            "period1": str(period2 - 5 * 365 * 86400),
+            "period2": str(period2),
+        },
+        headers={"User-Agent": "Mozilla/5.0 QuantDesk/1.0"},
+        timeout=8,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict):
+        print(f"  [!] Fundamentals unavailable for {symbol}: provider returned invalid data")
+        return {}
+    timeseries = payload.get("timeseries") or {}
+    if not isinstance(timeseries, dict):
+        print(f"  [!] Fundamentals unavailable for {symbol}: provider returned invalid data")
+        return {}
+    if timeseries.get("error"):
+        print(f"  [!] Fundamentals unavailable for {symbol}: provider returned an error")
+        return {}
+
+    results = timeseries.get("result") or []
+    return {
+        "market_cap": _latest_timeseries_value(results, "trailingMarketCap"),
+        "pe": _latest_timeseries_value(results, "trailingPeRatio"),
+        "net_income": _latest_timeseries_value(results, "trailingNetIncome"),
+        "quarterly_shares": _latest_timeseries_value(results, "quarterlyOrdinarySharesNumber"),
+        "annual_shares": _latest_timeseries_value(results, "annualOrdinarySharesNumber"),
+    }
+
+def fetch_one(symbol):
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        chart_future = executor.submit(_fetch_chart_data, symbol)
+        fundamentals_future = executor.submit(_fetch_fundamentals, symbol)
+        try:
+            chart_data = chart_future.result()
+        except (req.RequestException, ValueError, TypeError) as e:
+            print(f"  [!] Error fetching {symbol}: {e}")
+            return None
+        try:
+            fundamentals = fundamentals_future.result()
+        except (req.RequestException, ValueError, TypeError) as e:
+            print(f"  [!] Fundamentals unavailable for {symbol}: {e}")
+            fundamentals = {}
+
+    if chart_data is None:
+        return None
+
+    try:
+        meta, closes, volumes = chart_data
         current = meta.get("regularMarketPrice")
         if current is None:
             current = next((value for value in reversed(closes) if value is not None), None)
@@ -120,22 +226,34 @@ def fetch_one(symbol):
         if not math.isfinite(current) or not math.isfinite(prev_close) or prev_close <= 0:
             return None
 
-        try:
-            info = yf.Ticker(symbol).get_info()
-        except Exception as e:
-            print(f"  [!] Fundamentals unavailable for {symbol}: {e}")
-            info = {}
-
         change = current - prev_close
         pct = change / prev_close * 100
-        market_cap = info.get("marketCap")
-        pe_ratio = info.get("trailingPE")
-        if pe_ratio is None:
-            pe_ratio = info.get("forwardPE")
-        average_volume = info.get("averageVolume")
-        if average_volume is None:
-            average_volume = info.get("averageDailyVolume3Month")
-        if average_volume is None:
+        market_cap, market_cap_date = fundamentals.get("market_cap", (None, None))
+        net_income, _ = fundamentals.get("net_income", (None, None))
+        reported_pe, pe_date = fundamentals.get("pe", (None, None))
+        shares_outstanding, _ = fundamentals.get("quarterly_shares", (None, None))
+        if shares_outstanding is None:
+            shares_outstanding, _ = fundamentals.get("annual_shares", (None, None))
+        if market_cap is None and shares_outstanding is not None and shares_outstanding > 0:
+            market_cap = current * shares_outstanding
+
+        if net_income is not None and net_income <= 0:
+            pe_ratio = None
+        elif reported_pe is not None and reported_pe > 0 and pe_date == market_cap_date:
+            pe_ratio = reported_pe
+        elif market_cap is not None and net_income is not None and net_income > 0:
+            pe_ratio = market_cap / net_income
+        else:
+            pe_ratio = reported_pe if reported_pe is not None and reported_pe > 0 else None
+
+        valid_volumes = [
+            value for value in (_finite_number(volume) for volume in volumes)
+            if value is not None and value > 0
+        ]
+        if valid_volumes:
+            recent_volumes = valid_volumes[-63:]
+            average_volume = sum(recent_volumes) / len(recent_volumes)
+        else:
             average_volume = meta.get("averageDailyVolume3Month")
 
         return {
