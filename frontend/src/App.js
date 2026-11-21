@@ -1202,7 +1202,21 @@ function App({ user, onLogout, dark, toggleTheme }) {
     setMlLoading(true); setMlError(null); setMlPrediction(null); setShowForecast(false);
     try {
       const res = await apiFetch(`${ML_API}/predict/${stock.symbol}`);
-      const data = await res.json();
+      const body = await res.text();
+      let data = null;
+      if (body) {
+        try {
+          data = JSON.parse(body);
+        } catch {
+          throw new Error(`Prediction service returned an invalid response (HTTP ${res.status}).`);
+        }
+      }
+      if (!res.ok) {
+        throw new Error(data?.error || `Prediction request failed (HTTP ${res.status}).`);
+      }
+      if (!data) {
+        throw new Error(`Prediction service returned an empty response (HTTP ${res.status}).`);
+      }
       if (data.error) throw new Error(data.error);
       setMlPrediction(data); setShowForecast(true);
     } catch (e) { setMlError(e.message); }

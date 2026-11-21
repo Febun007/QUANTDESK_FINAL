@@ -24,7 +24,15 @@ class QuoteFetchTests(unittest.TestCase):
             }
         }
 
-        with patch("server.req.get", return_value=response) as get:
+        info = Mock()
+        info.get_info.return_value = {
+            "marketCap": 3_000_000_000_000,
+            "trailingPE": 15.67,
+            "averageVolume": 2_500_000,
+        }
+        with patch("server.req.get", return_value=response) as get, patch(
+            "server.yf.Ticker", return_value=info
+        ):
             quote = fetch_one("AAPL")
 
         get.assert_called_once_with(
@@ -37,6 +45,34 @@ class QuoteFetchTests(unittest.TestCase):
         self.assertEqual(quote["change"], 5)
         self.assertEqual(quote["pct"], 5.26)
         self.assertEqual(quote["name"], "Apple Inc.")
+        self.assertEqual(quote["mktCap"], "3.00T")
+        self.assertEqual(quote["pe"], 15.67)
+        self.assertEqual(quote["vol"], "2.50M")
+
+    def test_keeps_quote_when_fundamentals_are_unavailable(self):
+        response = Mock()
+        response.json.return_value = {
+            "chart": {
+                "result": [{
+                    "meta": {
+                        "regularMarketPrice": 100,
+                        "chartPreviousClose": 95,
+                        "averageDailyVolume3Month": 1230000,
+                    },
+                    "indicators": {"quote": [{"close": [95, 98, 100]}]},
+                }]
+            }
+        }
+
+        with patch("server.req.get", return_value=response), patch(
+            "server.yf.Ticker", side_effect=RuntimeError("fundamentals unavailable")
+        ):
+            quote = fetch_one("AAPL")
+
+        self.assertEqual(quote["price"], 100)
+        self.assertEqual(quote["mktCap"], "N/A")
+        self.assertEqual(quote["pe"], "N/A")
+        self.assertEqual(quote["vol"], "1.23M")
 
     def test_returns_no_quote_when_provider_fails(self):
         with patch(

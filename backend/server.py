@@ -120,8 +120,24 @@ def fetch_one(symbol):
         if not math.isfinite(current) or not math.isfinite(prev_close) or prev_close <= 0:
             return None
 
+        try:
+            info = yf.Ticker(symbol).get_info()
+        except Exception as e:
+            print(f"  [!] Fundamentals unavailable for {symbol}: {e}")
+            info = {}
+
         change = current - prev_close
         pct = change / prev_close * 100
+        market_cap = info.get("marketCap")
+        pe_ratio = info.get("trailingPE")
+        if pe_ratio is None:
+            pe_ratio = info.get("forwardPE")
+        average_volume = info.get("averageVolume")
+        if average_volume is None:
+            average_volume = info.get("averageDailyVolume3Month")
+        if average_volume is None:
+            average_volume = meta.get("averageDailyVolume3Month")
+
         return {
             "symbol": symbol,
             "name":   meta.get("longName") or meta.get("shortName") or symbol,
@@ -129,9 +145,9 @@ def fetch_one(symbol):
             "change": safe_round(change),
             "pct":    safe_round(pct),
             "sector": "—",
-            "mktCap": "N/A",
-            "pe":     "N/A",
-            "vol":    format_large(meta.get("averageDailyVolume3Month")),
+            "mktCap": format_large(market_cap),
+            "pe":     safe_round(pe_ratio),
+            "vol":    format_large(average_volume),
         }
     except (req.RequestException, ValueError, TypeError) as e:
         print(f"  [!] Error fetching {symbol}: {e}")
