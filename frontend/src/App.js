@@ -1453,11 +1453,9 @@ function App({ user, onLogout, dark, toggleTheme }) {
                         </>
                       )}
                     </div>
-                    {mlPrediction && (
-                      <div role="note" style={{ padding: "0 16px 10px", fontSize: 10, lineHeight: 1.5, color: "var(--text3)" }}>
-                        Forecasts are experimental estimates, not financial advice. Historical validation results do not guarantee future performance.
-                      </div>
-                    )}
+                    <div role="note" style={{ padding: "0 16px 10px", fontSize: 10, lineHeight: 1.5, color: "var(--text3)" }}>
+                      Forecasts are experimental estimates, not financial advice. Historical validation results do not guarantee future performance.
+                    </div>
 
                     {/* Controls */}
                     <div style={{ display: "flex", gap: 6, padding: "0 16px 12px", alignItems: "center", flexWrap: "wrap" }}>
