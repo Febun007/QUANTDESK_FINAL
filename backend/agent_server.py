@@ -35,7 +35,7 @@ threading.Thread(target=keep_alive, daemon=True).start()
 # ── API keys loaded from environment ONLY — never hardcoded ──────
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY")
 GROQ_KEY      = os.getenv("GROQ_API_KEY")
-CLAUDE_MODEL  = "claude-3-5-sonnet-20241022"
+CLAUDE_MODEL  = "claude-haiku-5-5"
 GROQ_MODELS   = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
 
 if not ANTHROPIC_KEY:
@@ -194,11 +194,11 @@ def ask_ai(system: str, messages: list, max_tokens: int = 1500):
     text, ok = ask_claude(system, messages, max_tokens)
     if ok and text:
         print("[agent] [OK] Claude responded")
-        return text, "claude"
+        return text, "claude", True
 
     print("[agent] >> Using Groq fallback")
     text, ok = ask_groq(system, messages, max_tokens)
-    return text, "groq"
+    return text, "groq", ok
 
 
 # ── Build system prompt ───────────────────────────────────────────
@@ -268,7 +268,9 @@ def analyze():
             messages.append({"role": m["role"], "content": str(m["content"])[:2000]})
     messages.append({"role": "user", "content": question})
 
-    answer, engine = ask_ai(system, messages)
+    answer, engine, ok = ask_ai(system, messages)
+    if not ok:
+        return jsonify({"error": "AI providers are unavailable. Check provider configuration and quota, then retry."}), 503
 
     return jsonify({
         "ticker": ticker,
@@ -309,7 +311,9 @@ def compare():
     system   = "You are an expert investment analyst. Compare stocks clearly using a markdown table and give a final recommendation."
     question = "Compare these stocks:\n\n" + "\n".join(rows) + "\n\nCreate a comparison table and tell me which one to invest in and why."
 
-    answer, engine = ask_ai(system, [{"role": "user", "content": question}])
+    answer, engine, ok = ask_ai(system, [{"role": "user", "content": question}])
+    if not ok:
+        return jsonify({"error": "AI providers are unavailable. Check provider configuration and quota, then retry."}), 503
     return jsonify({"answer": answer, "engine": f"{engine}+yfinance"})
 
 

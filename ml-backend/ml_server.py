@@ -550,6 +550,55 @@ def ensemble_predict(models, features, mu, sd, current_price, close, validation)
     }
 
 
+def cpu_baseline_predict(close):
+    close = np.asarray(close, dtype=np.float64)
+    if close.ndim != 1 or len(close) < SEQ_LEN + HORIZON:
+        raise ValueError("Not enough valid price history to forecast")
+    if not np.all(np.isfinite(close)) or np.any(close <= 0):
+        raise ValueError("Price history contains invalid values")
+
+    log_returns = np.diff(np.log(close))
+    lookback = 20
+    holdout_start = max(lookback, len(close) - 1 - HORIZON * 8)
+    correct = []
+    for anchor in range(holdout_start, len(close) - HORIZON, HORIZON):
+        recent = log_returns[max(0, anchor - lookback):anchor]
+        predicted_return = float(np.clip(np.mean(recent) * 0.25, -0.0025, 0.0025) * HORIZON)
+        actual_return = float(np.log(close[anchor + HORIZON] / close[anchor]))
+        correct.append(np.sign(predicted_return) == np.sign(actual_return))
+
+    validation_samples = len(correct)
+    validation_accuracy = float(np.mean(correct)) if correct else 0.0
+    current_price = float(close[-1])
+    daily_drift = float(np.clip(np.mean(log_returns[-lookback:]) * 0.25, -0.0025, 0.0025))
+    from datetime import datetime, timedelta
+    forecast = [
+        {
+            "date": (datetime.now() + timedelta(days=day)).strftime("%b %d"),
+            "predicted": round(current_price * float(np.exp(daily_drift * day)), 2),
+        }
+        for day in range(1, HORIZON + 1)
+    ]
+
+    target = forecast[-1]["predicted"]
+    delta = round((target - current_price) / current_price * 100, 2)
+    accuracy_pct = round(validation_accuracy * 100, 1)
+    regime = detect_regime(close)
+    return {
+        "signal": classify_signal(
+            delta, regime, 1.0, validation_accuracy, validation_samples
+        ),
+        "targetPrice": target,
+        "deltaPct": delta,
+        "confidence": accuracy_pct,
+        "validationAccuracy": accuracy_pct,
+        "validationSamples": validation_samples,
+        "regime": regime,
+        "forecast": forecast,
+        "model": "CPU trend baseline",
+    }
+
+
 # ═══════════════════════════════════════════════════════════════════
 #  BACKTEST REPORT HELPERS
 # ═══════════════════════════════════════════════════════════════════
@@ -848,13 +897,24 @@ def predict(symbol):
     symbol = symbol.upper()
     try:
         import yfinance as yf
-        hist = yf.Ticker(symbol).history(period="3y")
+        minimum_history = (
+            SEQ_LEN + HORIZON + 200
+            if DEVICE.type != "cpu"
+            else SEQ_LEN + HORIZON * 8
+        )
+        hist = yf.Ticker(symbol).history(period="1y")
         hist = hist.dropna(subset=["Close"])
-        if len(hist) < SEQ_LEN + HORIZON + 50:
+        if len(hist) < minimum_history:
             hist = yf.Ticker(symbol).history(period="5y")
             hist = hist.dropna(subset=["Close"])
         if hist.empty or len(hist) < SEQ_LEN + 10:
             return jsonify({"error": f"Insufficient data for {symbol}"}), 404
+        close = hist["Close"].to_numpy(dtype=np.float64)
+        if DEVICE.type == "cpu":
+            result = cpu_baseline_predict(close)
+            result["symbol"] = symbol
+            return jsonify(sanitize_for_json(result))
+
         models, mu, sd, _, validation = get_or_train(symbol, hist)
         if models is None:
             return jsonify({"error": "Not enough data to train"}), 422

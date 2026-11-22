@@ -1,6 +1,8 @@
 import unittest
 
-from ml_server import classify_signal
+import numpy as np
+
+from ml_server import HORIZON, SEQ_LEN, classify_signal, cpu_baseline_predict
 
 
 class SignalPolicyTests(unittest.TestCase):
@@ -21,6 +23,24 @@ class SignalPolicyTests(unittest.TestCase):
 
     def test_holds_with_too_few_non_overlapping_holdout_samples(self):
         self.assertEqual(classify_signal(8, "bull", 1.0, 0.75, 7), "HOLD")
+
+    def test_cpu_baseline_returns_bounded_fourteen_day_forecast(self):
+        close = 100 * np.exp(np.arange(300, dtype=np.float64) * 0.001)
+
+        result = cpu_baseline_predict(close)
+
+        self.assertEqual(len(result["forecast"]), HORIZON)
+        self.assertEqual(result["model"], "CPU trend baseline")
+        self.assertEqual(result["validationSamples"], 8)
+        self.assertGreater(result["targetPrice"], close[-1])
+        self.assertAlmostEqual(result["forecast"][-1]["predicted"], result["targetPrice"])
+        self.assertLessEqual(result["deltaPct"], 3.6)
+
+    def test_cpu_baseline_rejects_insufficient_or_invalid_prices(self):
+        with self.assertRaises(ValueError):
+            cpu_baseline_predict(np.ones(SEQ_LEN + HORIZON - 1))
+        with self.assertRaises(ValueError):
+            cpu_baseline_predict(np.array([1.0] * (SEQ_LEN + HORIZON - 1) + [np.nan]))
 
 
 if __name__ == "__main__":

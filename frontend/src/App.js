@@ -671,8 +671,11 @@ function AIChat({ selectedStock }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker: selectedStock.symbol, question: userMsg, history: messages.slice(-6) })
       });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || `AI request failed (HTTP ${res.status}).`);
+      if (!data || data.error || !data.answer) {
+        throw new Error(data?.error || "The AI provider returned an empty response.");
+      }
       setMessages(m => [...m, { role: "assistant", content: data.answer }]);
     } catch (e) {
       setMessages(m => [...m, { role: "assistant", content: `⚠ ${e.message}` }]);
@@ -789,7 +792,7 @@ function AIChat({ selectedStock }) {
           </button>
         </div>
         <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text3)", marginTop: 6 }}>
-          Claude · 15+ Live Indicators · {selectedStock.symbol}
+          AI assistant · 15+ Live Indicators · {selectedStock.symbol}
         </div>
       </div>
     </div>
@@ -1438,18 +1441,18 @@ function App({ user, onLogout, dark, toggleTheme }) {
                       <StatBox label="Avg Volume" value={stock.vol} />
                       {mlPrediction && (
                         <>
-                          <StatBox label="DL Signal" value={mlPrediction.signal}
+                          <StatBox label="Forecast Signal" value={mlPrediction.signal}
                             accent={mlPrediction.signal.includes("BUY") ? "var(--green)" : mlPrediction.signal === "HOLD" ? "var(--gold)" : "var(--red)"}
-                            sub={`14d holdout ${mlPrediction.validationAccuracy}% · ${mlPrediction.validationSamples} samples`} />
-                          <StatBox label="14d Target" value={`${currencySymbol}${mlPrediction.targetPrice}`}
+                            sub={`${mlPrediction.model} · ${mlPrediction.validationAccuracy}% over ${mlPrediction.validationSamples} holdouts`} />
+                          <StatBox label="14d Estimate" value={`${currencySymbol}${mlPrediction.targetPrice}`}
                             accent={mlPrediction.deltaPct >= 0 ? "var(--green)" : "var(--red)"}
                             sub={`${mlPrediction.deltaPct >= 0 ? "+" : ""}${mlPrediction.deltaPct}%`} />
                         </>
                       )}
                       {mlLoading && (
                         <>
-                          <StatBox label="DL Signal" value="—" sub="Training..." loading />
-                          <StatBox label="14d Target" value="—" sub="30–90s" loading />
+                          <StatBox label="Forecast Signal" value="—" sub="Calculating..." loading />
+                          <StatBox label="14d Estimate" value="—" sub="Please wait" loading />
                         </>
                       )}
                     </div>
@@ -1469,7 +1472,7 @@ function App({ user, onLogout, dark, toggleTheme }) {
                       <div style={{ width: 1, height: 18, background: "var(--divider)", margin: "0 2px" }} />
                       <button onClick={runPrediction} disabled={mlLoading}
                         style={{ padding: "5px 16px", background: mlLoading ? "rgba(0,0,0,0.05)" : showForecast ? "rgba(48,209,88,0.15)" : "var(--glass)", backdropFilter: "blur(8px)", color: mlLoading ? "var(--text3)" : showForecast ? "var(--green)" : "var(--text2)", border: `1px solid ${mlLoading ? "var(--glass-border)" : showForecast ? "rgba(48,209,88,0.3)" : "var(--glass-border)"}`, borderRadius: 20, fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", gap: 5, transition: "all 0.2s" }}>
-                        {mlLoading ? <><div style={{ width: 8, height: 8, border: "1.5px solid rgba(0,0,0,0.15)", borderTop: "1.5px solid var(--green)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />Training...</> : showForecast ? "✓ Forecast On" : "⚡ Run Transformer"}
+                        {mlLoading ? <><div style={{ width: 8, height: 8, border: "1.5px solid rgba(0,0,0,0.15)", borderTop: "1.5px solid var(--green)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />Calculating...</> : showForecast ? "✓ Forecast On" : "⚡ Generate Forecast"}
                       </button>
                       {showForecast && (
                         <button onClick={() => { setShowForecast(false); setMlPrediction(null); }}
