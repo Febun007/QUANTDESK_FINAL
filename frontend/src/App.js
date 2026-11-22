@@ -16,6 +16,7 @@ import {
 const API = "/api";
 const ML_API = "/api";
 const AGENT_API = "/agent";
+const WORLD_MONITOR_URL = "https://www.worldmonitor.app/dashboard?lat=22.5170&lon=-11.1523&zoom=0.94&view=global&timeRange=7d&layers=iranAttacks%2Chotspots%2Cconflicts%2Cbases%2Cnuclear%2Cmilitary%2Cweather%2CcanadaAlerts%2Coutages%2Cnatural%2Cwaterways%2Ceconomic%2Csanctions";
 
 /* ── CURRENCY HELPER ── */
 const getCurrencySymbol = (currencyOrSymbol) => {
@@ -1131,9 +1132,11 @@ function NewsPage({ dark }) {
 /* ─────────────────────────────────────────────────────────────────────────────
    NAV BUTTON — reusable top bar pill
 ───────────────────────────────────────────────────────────────────────────── */
-function NavPill({ label, active, onClick, hoverColor = "var(--text2)" }) {
+function NavPill({ label, active, onClick, href, hoverColor = "var(--text2)" }) {
+  const Element = href ? "a" : "button";
   return (
-    <button onClick={onClick}
+    <Element
+      {...(href ? { href, target: "_blank", rel: "noopener noreferrer" } : { onClick })}
       style={{
         padding: "5px 14px",
         background: active ? "rgba(232,160,32,0.15)" : "var(--glass)",
@@ -1145,11 +1148,14 @@ function NavPill({ label, active, onClick, hoverColor = "var(--text2)" }) {
         color: active ? "var(--gold)" : "var(--text2)",
         transition: "all 0.2s",
         whiteSpace: "nowrap",
-        boxShadow: "var(--panel-shadow)"
+        boxShadow: "var(--panel-shadow)",
+        textDecoration: "none",
+        display: "inline-flex",
+        alignItems: "center"
       }}
       onMouseEnter={e => { if (!active) { e.currentTarget.style.color = hoverColor; e.currentTarget.style.borderColor = "rgba(232,160,32,0.3)"; } }}
       onMouseLeave={e => { if (!active) { e.currentTarget.style.color = "var(--text2)"; e.currentTarget.style.borderColor = "var(--glass-border)"; } }}
-    >{label}</button>
+    >{label}</Element>
   );
 }
 
@@ -1314,6 +1320,7 @@ function App({ user, onLogout, dark, toggleTheme }) {
               <NavPill label="💼 Portfolio" active={activeView === "portfolio"} onClick={() => setActiveView("portfolio")} />
               <NavPill label="⚖️ Compare" active={activeView === "comparison"} onClick={() => setActiveView("comparison")} />
               <NavPill label="🧠 Sentiment" active={activeView === "sentiment"} onClick={() => setActiveView("sentiment")} />
+              <NavPill label="🌐 World Monitor" href={WORLD_MONITOR_URL} />
               <NavPill label="⚙️ Settings" active={activeView === "settings"} onClick={() => setActiveView("settings")} />
             </div>
 
