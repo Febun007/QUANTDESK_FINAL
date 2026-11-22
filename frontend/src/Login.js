@@ -194,6 +194,21 @@ const styles = `
   }
 
   .lg-field { margin-bottom: 16px; }
+  .lg-consent {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    margin: 4px 0 12px;
+    color: rgba(232,245,244,0.65);
+    font-size: 11px;
+    line-height: 1.45;
+    cursor: pointer;
+  }
+  .lg-consent input {
+    flex: 0 0 auto;
+    margin-top: 2px;
+    accent-color: var(--teal);
+  }
 
   .lg-label {
     display: block;
@@ -376,6 +391,7 @@ export default function Login({ onLogin, dark, toggleTheme }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [analyticsConsent, setAnalyticsConsent] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -384,7 +400,7 @@ export default function Login({ onLogin, dark, toggleTheme }) {
 
   useEffect(() => {
     setError(""); setSuccess(""); setFieldErrors({});
-    setName(""); setEmail(""); setPassword("");
+    setName(""); setEmail(""); setPassword(""); setAnalyticsConsent(false);
   }, [mode]);
 
   function validate() {
@@ -403,7 +419,9 @@ export default function Login({ onLogin, dark, toggleTheme }) {
     if (!validate()) return;
     setLoading(true); setError(""); setSuccess("");
     const endpoint = mode === "login" ? "/login" : "/register";
-    const body = mode === "login" ? { email, password } : { name, email, password };
+    const body = mode === "login"
+      ? { email, password }
+      : { name, email, password, analytics_consent: analyticsConsent };
     try {
       const res = await fetch(`${AUTH_API}${endpoint}`, {
         method: "POST",
@@ -483,6 +501,23 @@ export default function Login({ onLogin, dark, toggleTheme }) {
                   </button>
                 </div>
                 {fieldErrors.password && <div className="lg-field-error">{fieldErrors.password}</div>}
+              </div>
+              {mode === "register" && (
+                <label className="lg-consent">
+                  <input
+                    type="checkbox"
+                    checked={analyticsConsent}
+                    onChange={e => setAnalyticsConsent(e.target.checked)}
+                  />
+                  <span>
+                    Share anonymous registration counts. If selected, we count registrations per day only;
+                    no account details, IP address, device or location data are included. Optional.
+                  </span>
+                </label>
+              )}
+              <div style={{ margin: "0 0 12px", fontSize: 10, lineHeight: 1.5, color: "rgba(232,245,244,0.42)" }}>
+                Security notice: successful sign-ins are logged with the IP address and an approximate location,
+                and emailed to the QuantDesk administrator. Location can be inaccurate; records are retained for up to 30 days.
               </div>
               <button className="lg-btn" type="submit" disabled={loading}>
                 {loading

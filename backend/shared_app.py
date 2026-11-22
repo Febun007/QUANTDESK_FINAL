@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_caching import Cache
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import os
 
@@ -12,6 +13,17 @@ frontend_build = os.path.abspath(
 )
 
 app = Flask(__name__, static_folder=frontend_build, static_url_path="/")
+
+# Trust forwarded client IPs only when the deployment is behind a configured,
+# trusted proxy chain. Render uses one proxy by default.
+try:
+    trusted_proxy_count = int(os.getenv("TRUSTED_PROXY_COUNT", "0"))
+except ValueError as exc:
+    raise RuntimeError("TRUSTED_PROXY_COUNT must be a non-negative integer.") from exc
+if trusted_proxy_count < 0:
+    raise RuntimeError("TRUSTED_PROXY_COUNT must be a non-negative integer.")
+if trusted_proxy_count:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=trusted_proxy_count)
 
 # ── CORS — allow all origins when running locally (tunnel support) ─────────
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "*")

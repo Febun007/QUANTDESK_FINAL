@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { GlassPanel } from "../components/SharedComponents";
 
+const AUTH_API = process.env.REACT_APP_AUTH_API || "/auth";
+
 const DEFAULT_SETTINGS = {
   displayName: "",
   defaultWatchlist: "NVDA,AAPL,TSLA,AMZN,MSFT,META,GOOGL,NFLX,AMD,COIN",
@@ -20,6 +22,11 @@ function loadSettings() {
 export default function Settings({ dark, toggleTheme }) {
   const [settings, setSettings] = useState(loadSettings);
   const [saved, setSaved] = useState(false);
+  const [loginAlerts, setLoginAlerts] = useState([]);
+  const [loginAlertsEnabled, setLoginAlertsEnabled] = useState(false);
+  const [persistentLoginHistory, setPersistentLoginHistory] = useState(false);
+  const [loginAlertsError, setLoginAlertsError] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   function update(key, value) {
     setSettings(s => ({ ...s, [key]: value }));
@@ -56,6 +63,36 @@ export default function Settings({ dark, toggleTheme }) {
     // eslint-disable-next-line
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const token = localStorage.getItem("qd_token");
+    if (!token) return undefined;
+
+    async function loadLoginAlerts() {
+      try {
+        const response = await fetch(`${AUTH_API}/admin/login-alerts`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (response.status === 403) return;
+        if (active) setIsAdmin(true);
+        if (!response.ok) {
+          throw new Error(data.error || "Could not load login alerts.");
+        }
+        if (active) {
+          setLoginAlerts(data.events || []);
+          setLoginAlertsEnabled(Boolean(data.email_alerts_enabled));
+          setPersistentLoginHistory(Boolean(data.persistent_history));
+        }
+      } catch (error) {
+        if (active) setLoginAlertsError(error.message);
+      }
+    }
+
+    loadLoginAlerts();
+    return () => { active = false; };
+  }, []);
+
   const ToggleSwitch = ({ value, onChange, label }) => (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid var(--glass-border)" }}>
       <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text)" }}>{label}</span>
@@ -81,6 +118,46 @@ export default function Settings({ dark, toggleTheme }) {
           <span style={{ fontSize: 16, fontWeight: 800, color: "var(--text)", letterSpacing: "-0.3px" }}>Settings & Profile</span>
           <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text3)" }}>Saved to localStorage</span>
         </div>
+
+        {isAdmin && (
+          <GlassPanel style={{ padding: "24px" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: "0.10em", marginBottom: 8 }}>
+              🔐 Recent sign-ins
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 14 }}>
+              Login IP addresses and approximate locations are retained for up to 30 days.
+              {!persistentLoginHistory && " Without MongoDB, history resets on restart and is limited to 1,000 entries."}
+              {loginAlertsEnabled
+                ? " Email alerts are enabled."
+                : " Email alerts are disabled until SMTP is configured."}
+            </div>
+            {loginAlertsError && (
+              <div role="alert" style={{ fontSize: 12, color: "var(--red)", marginBottom: 10 }}>
+                {loginAlertsError}
+              </div>
+            )}
+            {loginAlerts.length === 0 && !loginAlertsError && (
+              <div style={{ fontSize: 12, color: "var(--text3)" }}>No sign-ins recorded yet.</div>
+            )}
+            {loginAlerts.map((event, index) => (
+              <div key={`${event.created_at}-${event.email}-${index}`} style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                gap: 8,
+                padding: "10px 0",
+                borderTop: "1px solid var(--glass-border)",
+                fontSize: 11,
+                color: "var(--text2)",
+                overflowWrap: "anywhere",
+              }}>
+                <span>{event.email}</span>
+                <span>{[event.city, event.country].filter(Boolean).join(", ") || "Location unavailable"}</span>
+                <span>{event.ip || "IP unavailable"}</span>
+                <span>{event.created_at ? new Date(event.created_at).toLocaleString() : "Time unavailable"}</span>
+              </div>
+            ))}
+          </GlassPanel>
+        )}
 
         {/* Profile */}
         <GlassPanel style={{ padding: "24px" }}>
