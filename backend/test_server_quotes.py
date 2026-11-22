@@ -14,6 +14,7 @@ def chart_response(volumes=None):
                 "meta": {
                     "symbol": "AAPL",
                     "regularMarketPrice": 100,
+                    "regularMarketTime": 1795363200,
                     "chartPreviousClose": 95,
                     "longName": "Apple Inc.",
                 },
@@ -79,6 +80,7 @@ class QuoteFetchTests(unittest.TestCase):
         self.assertEqual(facts_call.kwargs["timeout"], 8)
 
         self.assertEqual(quote["price"], 100)
+        self.assertEqual(quote["quote_timestamp"], 1795363200)
         self.assertEqual(quote["change"], 5)
         self.assertEqual(quote["pct"], 5.26)
         self.assertEqual(quote["name"], "Apple Inc.")

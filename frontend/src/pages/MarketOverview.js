@@ -79,6 +79,9 @@ export default function MarketOverview({ dark }) {
             <span style={{ fontSize: 11, color: "var(--text3)", marginLeft: 12, fontFamily: "var(--mono)" }}>
               {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
             </span>
+            <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 4 }}>
+              Yahoo Finance quotes may be delayed; check quote timestamps on the Home chart. Fundamentals may update less often.
+            </div>
           </div>
           <button onClick={fetchAll} style={{ padding: "5px 16px", background: "var(--glass)", backdropFilter: "blur(8px)", border: "1px solid var(--glass-border)", borderRadius: 12, fontSize: 11, fontWeight: 600, color: "var(--text2)", cursor: "pointer", boxShadow: "var(--panel-shadow)" }}>
             ↻ Refresh

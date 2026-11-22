@@ -260,6 +260,7 @@ def fetch_one(symbol):
             "symbol": symbol,
             "name":   meta.get("longName") or meta.get("shortName") or symbol,
             "price":  safe_round(current),
+            "quote_timestamp": _finite_number(meta.get("regularMarketTime")),
             "change": safe_round(change),
             "pct":    safe_round(pct),
             "sector": "—",

@@ -281,6 +281,35 @@ const GlobalStyles = ({ dark }) => (
       gap: 5px;
     }
 
+    @media (max-width: 1280px) {
+      .topbar-panel {
+        grid-template-areas:
+          "logo actions"
+          "nav nav";
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: auto auto;
+        height: auto;
+        padding: 10px 15px;
+        gap: 8px;
+        overflow: visible;
+      }
+      .topbar-logo { grid-area: logo; }
+      .topbar-divider,
+      .topbar-ticker,
+      .actions-divider { display: none; }
+      .topbar-nav {
+        grid-area: nav;
+        width: 100%;
+        flex-wrap: wrap;
+        overflow: visible;
+      }
+      .topbar-actions {
+        grid-area: actions;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+    }
+
     @media (max-width: 768px) {
       .topbar-panel {
         display: grid !important;
@@ -707,7 +736,7 @@ function AIChat({ selectedStock }) {
       <div style={{ padding: "14px 18px 10px", borderBottom: "1px solid var(--glass-border)", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
         <div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--green)", boxShadow: "0 0 8px rgba(48,209,88,0.6)", animation: "pulse-dot 2s ease infinite" }} />
         <span style={{ fontWeight: 700, fontSize: 12, letterSpacing: "0.05em", color: "var(--text2)", textTransform: "uppercase" }}>AI Analyst</span>
-        <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text3)", fontWeight: 500 }}>Live Data</span>
+        <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text3)", fontWeight: 500 }}>Market data may be delayed</span>
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5, padding: "10px 14px", borderBottom: "1px solid var(--glass-border)", flexShrink: 0 }}>
@@ -1227,6 +1256,9 @@ function App({ user, onLogout, dark, toggleTheme }) {
   function removeFromWatchlist(symbol) { setWatchlist(w => w.filter(s => s !== symbol)); setIdx(0); }
 
   const stock = stocks[Math.min(idx, stocks.length - 1)];
+  const quoteTimestamp = Number.isFinite(Number(stock?.quote_timestamp)) && Number(stock?.quote_timestamp) > 0
+    ? new Date(Number(stock.quote_timestamp) * 1000).toLocaleString()
+    : "Unavailable";
 
   // Derive currency symbol for the currently selected stock
   const currencySymbol = stock
@@ -1286,7 +1318,7 @@ function App({ user, onLogout, dark, toggleTheme }) {
               <div className="topbar-status">
                 <div style={{ width: 6, height: 6, borderRadius: "50%", background: stocksError ? "var(--red)" : loadingStocks ? "var(--gold)" : "var(--green)", boxShadow: `0 0 6px ${stocksError ? "rgba(255,69,58,0.6)" : loadingStocks ? "rgba(232,160,32,0.6)" : "rgba(48,209,88,0.6)"}`, animation: "pulse-dot 2s ease infinite" }} />
                 <span className="status-text" style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 500, color: stocksError ? "var(--red)" : loadingStocks ? "var(--gold)" : "var(--green)", whiteSpace: "nowrap" }}>
-                  {stocksError ? "OFFLINE" : loadingStocks ? "LOADING..." : "LIVE"}
+                  {stocksError ? "OFFLINE" : loadingStocks ? "LOADING..." : "READY"}
                 </span>
               </div>
               <div className="actions-divider" />
@@ -1387,6 +1419,9 @@ function App({ user, onLogout, dark, toggleTheme }) {
                           <span style={{ fontSize: 13, color: "var(--text2)", fontWeight: 400 }}>{stock.name}</span>
                         </div>
                         <div style={{ fontSize: 11, color: "var(--text3)", fontWeight: 500 }}>{stock.sector}</div>
+                        <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 4, lineHeight: 1.4 }}>
+                          Quote as of {quoteTimestamp} · Yahoo Finance quotes may be delayed; fundamentals may update less often.
+                        </div>
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontFamily: "var(--mono)", fontWeight: 700, fontSize: 26, color: "var(--text)", letterSpacing: "-0.5px" }}>{currencySymbol}{stock.price?.toFixed(2)}</div>
@@ -1418,6 +1453,11 @@ function App({ user, onLogout, dark, toggleTheme }) {
                         </>
                       )}
                     </div>
+                    {mlPrediction && (
+                      <div role="note" style={{ padding: "0 16px 10px", fontSize: 10, lineHeight: 1.5, color: "var(--text3)" }}>
+                        Forecasts are experimental estimates, not financial advice. Historical validation results do not guarantee future performance.
+                      </div>
+                    )}
 
                     {/* Controls */}
                     <div style={{ display: "flex", gap: 6, padding: "0 16px 12px", alignItems: "center", flexWrap: "wrap" }}>
