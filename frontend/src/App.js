@@ -1168,6 +1168,7 @@ function App({ user, onLogout, dark, toggleTheme }) {
   const [mlPrediction, setMlPrediction] = useState(null);
   const [mlLoading, setMlLoading] = useState(false);
   const [mlError, setMlError] = useState(null);
+  const [forecastHorizon, setForecastHorizon] = useState(14);
   const [showForecast, setShowForecast] = useState(false);
   const [showAccuracy, setShowAccuracy] = useState(false);
   // Active view state
@@ -1229,11 +1230,11 @@ function App({ user, onLogout, dark, toggleTheme }) {
     };
   }, [idx, stocks, timeRange]);
 
-  async function runPrediction() {
+  async function runPrediction(horizon = forecastHorizon) {
     if (!stock) return;
     setMlLoading(true); setMlError(null); setMlPrediction(null); setShowForecast(false);
     try {
-      const res = await apiFetch(`${ML_API}/predict/${stock.symbol}`);
+      const res = await apiFetch(`${ML_API}/predict/${stock.symbol}?days=${horizon}`);
       const body = await res.text();
       let data = null;
       if (body) {
@@ -1257,6 +1258,12 @@ function App({ user, onLogout, dark, toggleTheme }) {
 
   function addToWatchlist(symbol) { if (!watchlist.includes(symbol)) setWatchlist(w => [...w, symbol]); }
   function removeFromWatchlist(symbol) { setWatchlist(w => w.filter(s => s !== symbol)); setIdx(0); }
+  function selectForecastHorizon(days) {
+    if (days === forecastHorizon || mlLoading) return;
+    setForecastHorizon(days);
+    setMlError(null);
+    if (showForecast) runPrediction(days);
+  }
 
   const stock = stocks[Math.min(idx, stocks.length - 1)];
   const quoteTimestamp = Number.isFinite(Number(stock?.quote_timestamp)) && Number(stock?.quote_timestamp) > 0
@@ -1444,7 +1451,7 @@ function App({ user, onLogout, dark, toggleTheme }) {
                           <StatBox label="Forecast Signal" value={mlPrediction.signal}
                             accent={mlPrediction.signal.includes("BUY") ? "var(--green)" : mlPrediction.signal === "HOLD" ? "var(--gold)" : "var(--red)"}
                             sub={`${mlPrediction.model} · ${mlPrediction.validationAccuracy}% over ${mlPrediction.validationSamples} holdouts`} />
-                          <StatBox label="14d Estimate" value={`${currencySymbol}${mlPrediction.targetPrice}`}
+                          <StatBox label={`${mlPrediction.horizon || forecastHorizon}d Estimate`} value={`${currencySymbol}${mlPrediction.targetPrice}`}
                             accent={mlPrediction.deltaPct >= 0 ? "var(--green)" : "var(--red)"}
                             sub={`${mlPrediction.deltaPct >= 0 ? "+" : ""}${mlPrediction.deltaPct}%`} />
                         </>
@@ -1452,7 +1459,7 @@ function App({ user, onLogout, dark, toggleTheme }) {
                       {mlLoading && (
                         <>
                           <StatBox label="Forecast Signal" value="—" sub="Calculating..." loading />
-                          <StatBox label="14d Estimate" value="—" sub="Please wait" loading />
+                          <StatBox label={`${forecastHorizon}d Estimate`} value="—" sub="No model retraining" loading />
                         </>
                       )}
                     </div>
@@ -1467,6 +1474,15 @@ function App({ user, onLogout, dark, toggleTheme }) {
                         <button key={d} onClick={() => setTimeRange(d)}
                           style={{ padding: "5px 14px", background: timeRange === d ? "linear-gradient(135deg,#E8A020,#FFB84D)" : "var(--glass)", backdropFilter: "blur(8px)", color: timeRange === d ? "#fff" : "var(--text2)", border: `1px solid ${timeRange === d ? "transparent" : "var(--glass-border)"}`, borderRadius: 20, fontSize: 11, fontWeight: 600, boxShadow: timeRange === d ? "0 4px 12px rgba(232,160,32,0.25)" : "var(--panel-shadow)", transition: "all 0.2s" }}>
                           {d}D
+                        </button>
+                      ))}
+                      <div style={{ width: 1, height: 18, background: "var(--divider)", margin: "0 2px" }} />
+                      <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Forecast</span>
+                      {[14, 30, 60].map(days => (
+                        <button key={days} aria-pressed={forecastHorizon === days}
+                          onClick={() => selectForecastHorizon(days)} disabled={mlLoading}
+                          style={{ padding: "5px 12px", background: forecastHorizon === days ? "linear-gradient(135deg,#30D158,#65E887)" : "var(--glass)", color: forecastHorizon === days ? "#fff" : "var(--text2)", border: `1px solid ${forecastHorizon === days ? "transparent" : "var(--glass-border)"}`, borderRadius: 20, fontSize: 11, fontWeight: 600, boxShadow: "var(--panel-shadow)", opacity: mlLoading ? 0.6 : 1 }}>
+                          {days}D
                         </button>
                       ))}
                       <div style={{ width: 1, height: 18, background: "var(--divider)", margin: "0 2px" }} />

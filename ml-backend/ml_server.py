@@ -37,7 +37,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent / "backend"))
-from shared_app import app
+from shared_app import app, cache
 from auth_middleware import require_auth
 
 # ── News blueprint ────────────────────────────────────────────────
@@ -550,21 +550,21 @@ def ensemble_predict(models, features, mu, sd, current_price, close, validation)
     }
 
 
-def cpu_baseline_predict(close):
+def cpu_baseline_predict(close, horizon=HORIZON):
     close = np.asarray(close, dtype=np.float64)
-    if close.ndim != 1 or len(close) < SEQ_LEN + HORIZON:
+    lookback = 20
+    if close.ndim != 1 or len(close) < lookback + horizon:
         raise ValueError("Not enough valid price history to forecast")
     if not np.all(np.isfinite(close)) or np.any(close <= 0):
         raise ValueError("Price history contains invalid values")
 
     log_returns = np.diff(np.log(close))
-    lookback = 20
-    holdout_start = max(lookback, len(close) - 1 - HORIZON * 8)
+    holdout_start = max(lookback, len(close) - 1 - horizon * 8)
     correct = []
-    for anchor in range(holdout_start, len(close) - HORIZON, HORIZON):
+    for anchor in range(holdout_start, len(close) - horizon, horizon):
         recent = log_returns[max(0, anchor - lookback):anchor]
-        predicted_return = float(np.clip(np.mean(recent) * 0.25, -0.0025, 0.0025) * HORIZON)
-        actual_return = float(np.log(close[anchor + HORIZON] / close[anchor]))
+        predicted_return = float(np.clip(np.mean(recent) * 0.25, -0.0025, 0.0025) * horizon)
+        actual_return = float(np.log(close[anchor + horizon] / close[anchor]))
         correct.append(np.sign(predicted_return) == np.sign(actual_return))
 
     validation_samples = len(correct)
@@ -577,7 +577,7 @@ def cpu_baseline_predict(close):
             "date": (datetime.now() + timedelta(days=day)).strftime("%b %d"),
             "predicted": round(current_price * float(np.exp(daily_drift * day)), 2),
         }
-        for day in range(1, HORIZON + 1)
+        for day in range(1, horizon + 1)
     ]
 
     target = forecast[-1]["predicted"]
@@ -595,6 +595,7 @@ def cpu_baseline_predict(close):
         "validationSamples": validation_samples,
         "regime": regime,
         "forecast": forecast,
+        "horizon": horizon,
         "model": "CPU trend baseline",
     }
 
@@ -896,34 +897,51 @@ def get_or_train(symbol, hist):
 def predict(symbol):
     symbol = symbol.upper()
     try:
-        import yfinance as yf
+        try:
+            horizon = int(request.args.get("days", HORIZON))
+        except ValueError:
+            return jsonify({"error": "days must be one of 14, 30, or 60"}), 400
+        if horizon not in (14, 30, 60):
+            return jsonify({"error": "days must be one of 14, 30, or 60"}), 400
+
+        ensemble_eligible = DEVICE.type != "cpu" and horizon == HORIZON
         minimum_history = (
             SEQ_LEN + HORIZON + 200
-            if DEVICE.type != "cpu"
-            else SEQ_LEN + HORIZON * 8
+            if ensemble_eligible
+            else 20 + horizon
         )
-        hist = yf.Ticker(symbol).history(period="1y")
-        hist = hist.dropna(subset=["Close"])
-        if len(hist) < minimum_history:
-            hist = yf.Ticker(symbol).history(period="5y")
-            hist = hist.dropna(subset=["Close"])
-        if hist.empty or len(hist) < SEQ_LEN + 10:
+        history_key = f"forecast-history:{symbol}"
+        forecast_key = f"forecast:{symbol}:{horizon}"
+        cached_result = cache.get(forecast_key)
+        if cached_result is not None:
+            return jsonify(cached_result)
+
+        import yfinance as yf
+        hist = cache.get(history_key)
+        if hist is None or len(hist) < minimum_history:
+            hist = yf.Ticker(symbol).history(period="1y").dropna(subset=["Close"])
+            if len(hist) < minimum_history:
+                hist = yf.Ticker(symbol).history(period="5y").dropna(subset=["Close"])
+            cache.set(history_key, hist, timeout=300)
+        if hist.empty or len(hist) < minimum_history:
             return jsonify({"error": f"Insufficient data for {symbol}"}), 404
         close = hist["Close"].to_numpy(dtype=np.float64)
-        if DEVICE.type == "cpu":
-            result = cpu_baseline_predict(close)
+        if not ensemble_eligible:
+            result = cpu_baseline_predict(close, horizon)
             result["symbol"] = symbol
-            return jsonify(sanitize_for_json(result))
-
-        models, mu, sd, _, validation = get_or_train(symbol, hist)
-        if models is None:
-            return jsonify({"error": "Not enough data to train"}), 422
-        features, close = build_features(hist)
-        result = ensemble_predict(
-            models, features, mu, sd, float(close[-1]), close, validation
-        )
-        result["symbol"] = symbol
-        return jsonify(sanitize_for_json(result))
+        else:
+            models, mu, sd, _, validation = get_or_train(symbol, hist)
+            if models is None:
+                return jsonify({"error": "Not enough data to train"}), 422
+            features, close = build_features(hist)
+            result = ensemble_predict(
+                models, features, mu, sd, float(close[-1]), close, validation
+            )
+            result["horizon"] = horizon
+            result["symbol"] = symbol
+        result = sanitize_for_json(result)
+        cache.set(forecast_key, result, timeout=60)
+        return jsonify(result)
     except Exception as e:
         import traceback; traceback.print_exc()
         return jsonify({"error": str(e)}), 500

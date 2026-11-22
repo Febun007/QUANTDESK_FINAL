@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from ml_server import HORIZON, SEQ_LEN, classify_signal, cpu_baseline_predict
+from ml_server import HORIZON, classify_signal, cpu_baseline_predict
 
 
 class SignalPolicyTests(unittest.TestCase):
@@ -27,20 +27,23 @@ class SignalPolicyTests(unittest.TestCase):
     def test_cpu_baseline_returns_bounded_fourteen_day_forecast(self):
         close = 100 * np.exp(np.arange(300, dtype=np.float64) * 0.001)
 
-        result = cpu_baseline_predict(close)
+        for horizon in (14, 30, 60):
+            with self.subTest(horizon=horizon):
+                result = cpu_baseline_predict(close, horizon)
 
-        self.assertEqual(len(result["forecast"]), HORIZON)
-        self.assertEqual(result["model"], "CPU trend baseline")
-        self.assertEqual(result["validationSamples"], 8)
-        self.assertGreater(result["targetPrice"], close[-1])
-        self.assertAlmostEqual(result["forecast"][-1]["predicted"], result["targetPrice"])
-        self.assertLessEqual(result["deltaPct"], 3.6)
+                self.assertEqual(len(result["forecast"]), horizon)
+                self.assertEqual(result["horizon"], horizon)
+                self.assertEqual(result["model"], "CPU trend baseline")
+                self.assertGreaterEqual(result["validationSamples"], 1)
+                self.assertGreater(result["targetPrice"], close[-1])
+                self.assertAlmostEqual(result["forecast"][-1]["predicted"], result["targetPrice"])
+                self.assertLessEqual(result["deltaPct"], horizon * 0.25)
 
     def test_cpu_baseline_rejects_insufficient_or_invalid_prices(self):
         with self.assertRaises(ValueError):
-            cpu_baseline_predict(np.ones(SEQ_LEN + HORIZON - 1))
+            cpu_baseline_predict(np.ones(20 + 60 - 1), 60)
         with self.assertRaises(ValueError):
-            cpu_baseline_predict(np.array([1.0] * (SEQ_LEN + HORIZON - 1) + [np.nan]))
+            cpu_baseline_predict(np.array([1.0] * (20 + HORIZON - 1) + [np.nan]))
 
 
 if __name__ == "__main__":

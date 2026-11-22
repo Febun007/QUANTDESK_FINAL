@@ -24,21 +24,30 @@ class CpuForecastRouteTests(unittest.TestCase):
             "Close": 100 * np.exp(np.arange(300, dtype=np.float64) * 0.001)
         })
 
+        ml_server.cache.clear()
         with patch.dict(os.environ, {"JWT_SECRET": secret}), patch.object(
             ml_server, "DEVICE", SimpleNamespace(type="cpu")
         ), patch("yfinance.Ticker", return_value=ticker), patch.object(
             ml_server, "get_or_train", side_effect=AssertionError("CPU route must not train")
         ):
-            response = ml_server.app.test_client().get(
-                "/api/predict/NVDA",
+            client = ml_server.app.test_client()
+            for horizon in (14, 30, 60):
+                response = client.get(
+                    f"/api/predict/NVDA?days={horizon}",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                self.assertEqual(response.status_code, 200)
+                payload = response.get_json()
+                self.assertEqual(payload["symbol"], "NVDA")
+                self.assertEqual(payload["model"], "CPU trend baseline")
+                self.assertEqual(payload["horizon"], horizon)
+                self.assertEqual(len(payload["forecast"]), horizon)
+
+            bad_request = client.get(
+                "/api/predict/NVDA?days=21",
                 headers={"Authorization": f"Bearer {token}"},
             )
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.get_json()
-        self.assertEqual(payload["symbol"], "NVDA")
-        self.assertEqual(payload["model"], "CPU trend baseline")
-        self.assertEqual(len(payload["forecast"]), ml_server.HORIZON)
+        self.assertEqual(bad_request.status_code, 400)
         ticker.history.assert_called_once_with(period="1y")
 
 
