@@ -1486,7 +1486,7 @@ function App({ user, onLogout, dark, toggleTheme }) {
                         </button>
                       ))}
                       <div style={{ width: 1, height: 18, background: "var(--divider)", margin: "0 2px" }} />
-                      <button onClick={runPrediction} disabled={mlLoading}
+                      <button onClick={() => runPrediction()} disabled={mlLoading}
                         style={{ padding: "5px 16px", background: mlLoading ? "rgba(0,0,0,0.05)" : showForecast ? "rgba(48,209,88,0.15)" : "var(--glass)", backdropFilter: "blur(8px)", color: mlLoading ? "var(--text3)" : showForecast ? "var(--green)" : "var(--text2)", border: `1px solid ${mlLoading ? "var(--glass-border)" : showForecast ? "rgba(48,209,88,0.3)" : "var(--glass-border)"}`, borderRadius: 20, fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", gap: 5, transition: "all 0.2s" }}>
                         {mlLoading ? <><div style={{ width: 8, height: 8, border: "1.5px solid rgba(0,0,0,0.15)", borderTop: "1.5px solid var(--green)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />Calculating...</> : showForecast ? "✓ Forecast On" : "⚡ Generate Forecast"}
                       </button>
