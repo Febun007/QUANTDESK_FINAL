@@ -150,7 +150,7 @@ def _prune_login_events(now):
     LOGIN_EVENTS[:] = retained[-MAX_MEMORY_LOGIN_EVENTS:]
 
 
-def _record_login_event(email):
+def _record_login_event(email, event_type="login"):
     now = datetime.now(timezone.utc)
     try:
         ip = str(ipaddress.ip_address(request.remote_addr)) if request.remote_addr else None
@@ -158,6 +158,7 @@ def _record_login_event(email):
         ip = None
     location = _lookup_ip_location(ip) if ip else {}
     event = {
+        "event_type": event_type,
         "email": email,
         "created_at": now,
         "ip": ip,
@@ -180,12 +181,17 @@ def _send_login_alert(event):
         return
 
     place = ", ".join(part for part in (event["city"], event["country"]) if part)
+    activity = (
+        "new account registration"
+        if event["event_type"] == "registration"
+        else "successful sign-in"
+    )
     message = EmailMessage()
-    message["Subject"] = "QuantDesk successful sign-in"
+    message["Subject"] = f"QuantDesk {activity}"
     message["From"] = SMTP_FROM
     message["To"] = ADMIN_EMAIL
     message.set_content(
-        "A successful sign-in occurred on QuantDesk.\n\n"
+        f"A {activity} occurred on QuantDesk.\n\n"
         f"Account: {event['email']}\n"
         f"Time (UTC): {event['created_at'].isoformat()}\n"
         f"IP address: {event['ip'] or 'unavailable'}\n"
@@ -275,6 +281,8 @@ def _register_route():
         return jsonify({"error": "Email already registered"}), 409
     if body.get("analytics_consent") is True:
         _record_registration_analytics()
+    event = _record_login_event(email, event_type="registration")
+    _send_login_alert(event)
     token = generate_token(email, name)
     print(f"[auth] Registered: {email}")
 

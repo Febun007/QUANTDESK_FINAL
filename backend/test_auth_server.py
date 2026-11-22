@@ -67,6 +67,45 @@ class LoginAlertTests(unittest.TestCase):
         self.assertEqual(auth_server.LOGIN_EVENTS, [])
         send_alert.assert_not_called()
 
+    def test_registration_is_recorded_and_visible_only_to_admin(self):
+        with patch.object(auth_server, "_lookup_ip_location", return_value={
+            "city": "Example City", "country": "Example Country"
+        }), patch.object(auth_server, "_send_login_alert") as send_alert:
+            response = self.client.post(
+                "/auth/register",
+                json={
+                    "name": "New User",
+                    "email": "new-user@example.test",
+                    "password": "new-user-password",
+                },
+                environ_overrides={"REMOTE_ADDR": "8.8.8.8"},
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(auth_server.LOGIN_EVENTS), 1)
+        event = auth_server.LOGIN_EVENTS[0]
+        self.assertEqual(event["event_type"], "registration")
+        self.assertEqual(event["email"], "new-user@example.test")
+        self.assertEqual(event["city"], "Example City")
+        send_alert.assert_called_once_with(event)
+
+        admin_token = auth_server.generate_token("admin@quantdesk.test", "Admin")
+        user_token = response.get_json()["token"]
+        admin_response = self.client.get(
+            "/auth/admin/login-alerts",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        user_response = self.client.get(
+            "/auth/admin/login-alerts",
+            headers={"Authorization": f"Bearer {user_token}"},
+        )
+
+        self.assertEqual(admin_response.status_code, 200)
+        self.assertEqual(
+            admin_response.get_json()["events"][0]["event_type"], "registration"
+        )
+        self.assertEqual(user_response.status_code, 403)
+
     def test_login_history_is_only_available_to_admin(self):
         admin_token = auth_server.generate_token("admin@quantdesk.test", "Admin")
         user_token = auth_server.generate_token("trader@example.test", "Trader")

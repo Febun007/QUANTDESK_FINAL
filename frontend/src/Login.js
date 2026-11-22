@@ -516,8 +516,8 @@ export default function Login({ onLogin, dark, toggleTheme }) {
                 </label>
               )}
               <div style={{ margin: "0 0 12px", fontSize: 10, lineHeight: 1.5, color: "rgba(232,245,244,0.42)" }}>
-                Security notice: successful sign-ins are logged with the IP address and an approximate location,
-                and emailed to the QuantDesk administrator. Location can be inaccurate; records are retained for up to 30 days.
+                Security notice: successful registrations and sign-ins are logged with the IP address and an approximate location,
+                and made visible to the QuantDesk administrator. Location can be inaccurate; records are retained for up to 30 days.
               </div>
               <button className="lg-btn" type="submit" disabled={loading}>
                 {loading

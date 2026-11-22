@@ -151,14 +151,14 @@ export default function Settings({ dark, toggleTheme }) {
         {isAdmin && (
           <GlassPanel style={{ padding: "24px" }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: "0.10em", marginBottom: 8 }}>
-              🔐 Recent sign-ins
+              🔐 Account activity
             </div>
             <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 14 }}>
-              Login IP addresses and approximate locations are retained for up to 30 days.
+              Registrations and sign-ins, with IP addresses and approximate locations, are retained for up to 30 days.
               {!persistentLoginHistory && " Without MongoDB, history resets on restart and is limited to 1,000 entries."}
               {loginAlertsEnabled
-                ? " Email alerts are enabled."
-                : " Email alerts are disabled until SMTP is configured."}
+                ? " Admin email alerts are enabled."
+                : " Admin email alerts are disabled until SMTP is configured."}
             </div>
             {loginAlertsError && (
               <div role="alert" style={{ fontSize: 12, color: "var(--red)", marginBottom: 10 }}>
@@ -169,7 +169,7 @@ export default function Settings({ dark, toggleTheme }) {
               <div style={{ fontSize: 12, color: "var(--text3)" }}>No sign-ins recorded yet.</div>
             )}
             <div
-              aria-label="Sign-in history"
+              aria-label="Registration and sign-in history"
               role="region"
               tabIndex={0}
               style={{ maxHeight: 420, overflowY: "auto", overscrollBehavior: "contain" }}
@@ -185,6 +185,7 @@ export default function Settings({ dark, toggleTheme }) {
                   color: "var(--text2)",
                   overflowWrap: "anywhere",
                 }}>
+                  <span>{event.event_type === "registration" ? "New registration" : "Sign-in"}</span>
                   <span>{event.email}</span>
                   <span>{[event.city, event.country].filter(Boolean).join(", ") || "Location unavailable"}</span>
                   <span>{event.ip || "IP unavailable"}</span>
