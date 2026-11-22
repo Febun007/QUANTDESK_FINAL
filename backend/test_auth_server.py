@@ -86,6 +86,39 @@ class LoginAlertTests(unittest.TestCase):
         self.assertEqual(admin_response.status_code, 200)
         self.assertIn("email_alerts_enabled", admin_response.get_json())
 
+    def test_admin_can_page_through_all_login_history(self):
+        created_at = auth_server.datetime.now(auth_server.timezone.utc)
+        auth_server.LOGIN_EVENTS.extend([
+            {
+                "email": f"user-{index}@example.test",
+                "created_at": created_at - auth_server.timedelta(minutes=index),
+                "ip": f"8.8.8.{index + 1}",
+                "city": None,
+                "country": None,
+            }
+            for index in range(5)
+        ])
+        token = auth_server.generate_token("admin@quantdesk.test", "Admin")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        first_page = self.client.get(
+            "/auth/admin/login-alerts?limit=2&offset=0", headers=headers
+        ).get_json()
+        second_page = self.client.get(
+            "/auth/admin/login-alerts?limit=2&offset=2", headers=headers
+        ).get_json()
+        third_page = self.client.get(
+            "/auth/admin/login-alerts?limit=2&offset=4", headers=headers
+        ).get_json()
+
+        self.assertEqual(len(first_page["events"]), 2)
+        self.assertTrue(first_page["has_more"])
+        self.assertEqual(first_page["next_offset"], 2)
+        self.assertEqual(len(second_page["events"]), 2)
+        self.assertTrue(second_page["has_more"])
+        self.assertEqual(len(third_page["events"]), 1)
+        self.assertFalse(third_page["has_more"])
+
     def test_ip_lookup_skips_private_addresses_and_uses_https_for_public(self):
         with patch.object(auth_server.requests, "get") as get:
             self.assertEqual(auth_server._lookup_ip_location("127.0.0.1"), {})

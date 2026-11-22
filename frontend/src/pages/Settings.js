@@ -27,6 +27,9 @@ export default function Settings({ dark, toggleTheme }) {
   const [persistentLoginHistory, setPersistentLoginHistory] = useState(false);
   const [loginAlertsError, setLoginAlertsError] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [loginAlertsOffset, setLoginAlertsOffset] = useState(0);
+  const [hasOlderLoginAlerts, setHasOlderLoginAlerts] = useState(false);
+  const [loadingOlderLoginAlerts, setLoadingOlderLoginAlerts] = useState(false);
 
   function update(key, value) {
     setSettings(s => ({ ...s, [key]: value }));
@@ -70,7 +73,7 @@ export default function Settings({ dark, toggleTheme }) {
 
     async function loadLoginAlerts() {
       try {
-        const response = await fetch(`${AUTH_API}/admin/login-alerts`, {
+        const response = await fetch(`${AUTH_API}/admin/login-alerts?limit=100&offset=0`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await response.json();
@@ -83,6 +86,8 @@ export default function Settings({ dark, toggleTheme }) {
           setLoginAlerts(data.events || []);
           setLoginAlertsEnabled(Boolean(data.email_alerts_enabled));
           setPersistentLoginHistory(Boolean(data.persistent_history));
+          setHasOlderLoginAlerts(Boolean(data.has_more));
+          setLoginAlertsOffset(data.next_offset || 0);
         }
       } catch (error) {
         if (active) setLoginAlertsError(error.message);
@@ -92,6 +97,30 @@ export default function Settings({ dark, toggleTheme }) {
     loadLoginAlerts();
     return () => { active = false; };
   }, []);
+
+  async function loadOlderLoginAlerts() {
+    if (loadingOlderLoginAlerts || !hasOlderLoginAlerts) return;
+    setLoadingOlderLoginAlerts(true);
+    setLoginAlertsError("");
+    try {
+      const token = localStorage.getItem("qd_token");
+      const response = await fetch(
+        `${AUTH_API}/admin/login-alerts?limit=100&offset=${loginAlertsOffset}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Could not load older sign-ins.");
+      }
+      setLoginAlerts(current => [...current, ...(data.events || [])]);
+      setHasOlderLoginAlerts(Boolean(data.has_more));
+      setLoginAlertsOffset(data.next_offset || loginAlertsOffset);
+    } catch (error) {
+      setLoginAlertsError(error.message);
+    } finally {
+      setLoadingOlderLoginAlerts(false);
+    }
+  }
 
   const ToggleSwitch = ({ value, onChange, label }) => (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid var(--glass-border)" }}>
@@ -139,23 +168,49 @@ export default function Settings({ dark, toggleTheme }) {
             {loginAlerts.length === 0 && !loginAlertsError && (
               <div style={{ fontSize: 12, color: "var(--text3)" }}>No sign-ins recorded yet.</div>
             )}
-            {loginAlerts.map((event, index) => (
-              <div key={`${event.created_at}-${event.email}-${index}`} style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                gap: 8,
-                padding: "10px 0",
-                borderTop: "1px solid var(--glass-border)",
-                fontSize: 11,
-                color: "var(--text2)",
-                overflowWrap: "anywhere",
-              }}>
-                <span>{event.email}</span>
-                <span>{[event.city, event.country].filter(Boolean).join(", ") || "Location unavailable"}</span>
-                <span>{event.ip || "IP unavailable"}</span>
-                <span>{event.created_at ? new Date(event.created_at).toLocaleString() : "Time unavailable"}</span>
-              </div>
-            ))}
+            <div
+              aria-label="Sign-in history"
+              role="region"
+              tabIndex={0}
+              style={{ maxHeight: 420, overflowY: "auto", overscrollBehavior: "contain" }}
+            >
+              {loginAlerts.map((event, index) => (
+                <div key={`${event.created_at}-${event.email}-${index}`} style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                  gap: 8,
+                  padding: "10px 0",
+                  borderTop: "1px solid var(--glass-border)",
+                  fontSize: 11,
+                  color: "var(--text2)",
+                  overflowWrap: "anywhere",
+                }}>
+                  <span>{event.email}</span>
+                  <span>{[event.city, event.country].filter(Boolean).join(", ") || "Location unavailable"}</span>
+                  <span>{event.ip || "IP unavailable"}</span>
+                  <span>{event.created_at ? new Date(event.created_at).toLocaleString() : "Time unavailable"}</span>
+                </div>
+              ))}
+              {hasOlderLoginAlerts && (
+                <button
+                  type="button"
+                  onClick={loadOlderLoginAlerts}
+                  disabled={loadingOlderLoginAlerts}
+                  style={{
+                    width: "100%",
+                    marginTop: 10,
+                    padding: 10,
+                    border: "1px solid var(--glass-border)",
+                    borderRadius: 10,
+                    color: "var(--text2)",
+                    background: "var(--glass)",
+                    cursor: loadingOlderLoginAlerts ? "wait" : "pointer",
+                  }}
+                >
+                  {loadingOlderLoginAlerts ? "Loading older sign-ins..." : "Load older sign-ins"}
+                </button>
+              )}
+            </div>
           </GlassPanel>
         )}
 

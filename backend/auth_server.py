@@ -309,12 +309,20 @@ def admin_login_alerts():
     if str(payload.get("email", "")).lower() != ADMIN_EMAIL:
         return jsonify({"error": "Administrator access required"}), 403
 
+    try:
+        offset = int(request.args.get("offset", "0"))
+        limit = int(request.args.get("limit", "100"))
+    except ValueError:
+        return jsonify({"error": "Offset and limit must be integers"}), 400
+    if offset < 0 or not 1 <= limit <= 100:
+        return jsonify({"error": "Offset must be non-negative and limit must be 1-100"}), 400
+
     if _login_event_collection is not None:
         try:
             events = list(
                 _login_event_collection.find(
                     {}, {"_id": 0}
-                ).sort("created_at", -1).limit(100)
+                ).sort([("created_at", -1), ("_id", -1)]).skip(offset).limit(limit + 1)
             )
         except PyMongoError as exc:
             print(f"[auth] Login event query failed ({type(exc).__name__})")
@@ -322,9 +330,13 @@ def admin_login_alerts():
     else:
         now = datetime.now(timezone.utc)
         _prune_login_events(now)
-        events = sorted(
+        all_events = sorted(
             LOGIN_EVENTS, key=lambda event: event["created_at"], reverse=True
-        )[:100]
+        )
+        events = all_events[offset:offset + limit + 1]
+
+    has_more = len(events) > limit
+    events = events[:limit]
 
     return jsonify({
         "events": [
@@ -334,6 +346,8 @@ def admin_login_alerts():
             }
             for event in events
         ],
+        "has_more": has_more,
+        "next_offset": offset + len(events),
         "email_alerts_enabled": SMTP_CONFIGURED,
         "retention_days": LOGIN_EVENT_RETENTION_DAYS,
         "persistent_history": _login_event_collection is not None,
