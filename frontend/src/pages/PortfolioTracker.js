@@ -165,10 +165,10 @@ export default function PortfolioTracker({ dark }) {
               <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} placeholder="AAPL" style={{ width: "100%" }} />
               {searching && <div style={{ position: "absolute", right: 10, top: 28, width: 10, height: 10, border: "1.5px solid rgba(232,160,32,0.3)", borderTop: "1.5px solid var(--gold)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
               {searchResults.length > 0 && (
-                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12, zIndex: 100, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.15)", marginTop: 4 }}>
+                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: dark ? "rgba(17,26,46,0.98)" : "rgba(255,255,255,0.96)", backdropFilter: "blur(20px)", border: "1px solid var(--glass-border)", borderRadius: 12, zIndex: 100, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.15)", marginTop: 4 }}>
                   {searchResults.map(r => (
                     <div key={r.symbol} onClick={() => { setTicker(r.symbol); setSearchResults([]); }}
-                      style={{ padding: "8px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(0,0,0,0.05)", fontSize: 12 }}
+                      style={{ padding: "8px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--glass-border)", color: "var(--text)", fontSize: 12 }}
                       onMouseEnter={e => e.currentTarget.style.background = "rgba(232,160,32,0.08)"}
                       onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                     >
