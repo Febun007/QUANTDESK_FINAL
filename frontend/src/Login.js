@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { LegalModal } from "./pages/Legal";
 
 const AUTH_API = process.env.REACT_APP_AUTH_API || "/auth";
 
@@ -397,6 +398,7 @@ export default function Login({ onLogin, dark, toggleTheme }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
+  const [legalDocument, setLegalDocument] = useState(null);
 
   useEffect(() => {
     setError(""); setSuccess(""); setFieldErrors({});
@@ -515,6 +517,20 @@ export default function Login({ onLogin, dark, toggleTheme }) {
                   </span>
                 </label>
               )}
+              {mode === "register" && (
+                <div style={{ margin: "0 0 12px", fontSize: 10, lineHeight: 1.5, color: "rgba(232,245,244,0.55)" }}>
+                  By creating an account, you agree to the{" "}
+                  <button type="button" onClick={() => setLegalDocument("terms")}
+                    style={{ border: "none", background: "none", color: "#00c9b1", padding: 0, fontSize: "inherit", textDecoration: "underline" }}>
+                    Terms &amp; Conditions
+                  </button>{" "}
+                  and acknowledge the{" "}
+                  <button type="button" onClick={() => setLegalDocument("privacy")}
+                    style={{ border: "none", background: "none", color: "#00c9b1", padding: 0, fontSize: "inherit", textDecoration: "underline" }}>
+                    Privacy Policy
+                  </button>.
+                </div>
+              )}
               <div style={{ margin: "0 0 12px", fontSize: 10, lineHeight: 1.5, color: "rgba(232,245,244,0.42)" }}>
                 Security notice: successful registrations and sign-ins are logged with the IP address and an approximate location,
                 and made visible to the QuantDesk administrator. Location can be inaccurate; records are retained for up to 30 days.
@@ -551,6 +567,9 @@ export default function Login({ onLogin, dark, toggleTheme }) {
             ))}
           </div>
         </div>
+        {legalDocument && (
+          <LegalModal document={legalDocument} dark={dark} onClose={() => setLegalDocument(null)} />
+        )}
       </div>
     </>
   );

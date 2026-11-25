@@ -6,6 +6,7 @@ import PortfolioTracker from "./pages/PortfolioTracker";
 import StockComparison from "./pages/StockComparison";
 import SentimentDashboard from "./pages/SentimentDashboard";
 import Settings from "./pages/Settings";
+import LegalPage from "./pages/Legal";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   AreaChart, Area, XAxis, YAxis,
@@ -1322,6 +1323,7 @@ function App({ user, onLogout, dark, toggleTheme }) {
               <NavPill label="🧠 Sentiment" active={activeView === "sentiment"} onClick={() => setActiveView("sentiment")} />
               <NavPill label="🌐 World Monitor" href={WORLD_MONITOR_URL} />
               <NavPill label="⚙️ Settings" active={activeView === "settings"} onClick={() => setActiveView("settings")} />
+              <NavPill label="⚖️ Legal" active={activeView === "legal"} onClick={() => setActiveView("legal")} />
             </div>
 
             {/* CENTRE — Ticker (only on dashboard) */}
@@ -1371,6 +1373,9 @@ function App({ user, onLogout, dark, toggleTheme }) {
 
         {/* ══ SETTINGS ════════════════════════════════════════════════════════ */}
         {activeView === "settings" && <Settings dark={dark} toggleTheme={toggleTheme} />}
+
+        {/* ══ LEGAL ═══════════════════════════════════════════════════════════ */}
+        {activeView === "legal" && <LegalPage />}
 
         {/* ══ DASHBOARD VIEW — 3-COL ════════════════════════════════════════ */}
         {activeView === "dashboard" && (
