@@ -379,6 +379,72 @@ const styles = `
   .t-item { display: flex; gap: 7px; }
   .t-up   { color: #00e5a0; }
   .t-dn   { color: #ff6b6b; }
+
+  .lg-root.light-theme {
+    background: #e8f2f1;
+    color: #142a29;
+    --text: rgba(20,42,41,0.92);
+    --text2: rgba(20,42,41,0.68);
+    --text3: rgba(20,42,41,0.48);
+    --gold: #007f70;
+    --glass: rgba(255,255,255,0.78);
+    --glass-border: rgba(0,140,125,0.2);
+  }
+  .lg-root.dark-theme {
+    --text: rgba(255,255,255,0.92);
+    --text2: rgba(255,255,255,0.62);
+    --text3: rgba(255,255,255,0.4);
+    --gold: #00c9b1;
+    --glass: rgba(255,255,255,0.06);
+    --glass-border: rgba(255,255,255,0.12);
+  }
+  .lg-root.light-theme .lg-video-bg video { animation: none; opacity: 0.16; }
+  .lg-root.light-theme .lg-video-bg::before {
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0,201,177,0.12) 0%, transparent 70%),
+      linear-gradient(180deg, rgba(235,247,245,0.76) 0%, rgba(235,247,245,0.45) 40%, rgba(225,240,238,0.86) 100%);
+  }
+  .lg-root.light-theme .lg-video-bg::after { opacity: 0.15; }
+  .lg-root.light-theme .lg-card {
+    background: rgba(255,255,255,0.86);
+    border-color: rgba(0,140,125,0.28);
+    box-shadow: 0 24px 64px rgba(20,60,55,0.16), 0 0 0 1px rgba(0,201,177,0.06);
+  }
+  .lg-root.light-theme .lg-header,
+  .lg-root.light-theme .lg-footer { border-color: rgba(0,140,125,0.16); }
+  .lg-root.light-theme .lg-logo { color: #15312e; }
+  .lg-root.light-theme .lg-subtitle { color: rgba(20,42,41,0.58); }
+  .lg-root.light-theme .lg-tabs {
+    background: rgba(15,48,44,0.04);
+    border-color: rgba(0,140,125,0.18);
+  }
+  .lg-root.light-theme .lg-tab { color: rgba(20,42,41,0.55); }
+  .lg-root.light-theme .lg-tab.active {
+    background: rgba(0,170,150,0.11);
+    color: #007f70;
+  }
+  .lg-root.light-theme .lg-input {
+    background: rgba(255,255,255,0.78);
+    border-color: rgba(0,140,125,0.25);
+    color: #142a29;
+  }
+  .lg-root.light-theme .lg-input:focus { background: #fff; }
+  .lg-root.light-theme .lg-input::placeholder { color: rgba(20,42,41,0.38); }
+  .lg-root.light-theme .pass-toggle { color: rgba(0,120,105,0.78); }
+  .lg-root.light-theme .lg-consent,
+  .lg-root.light-theme .lg-legal-notice,
+  .lg-root.light-theme .lg-security-notice { color: rgba(20,42,41,0.68) !important; }
+  .lg-root.light-theme .lg-legal-notice button { color: #007f70 !important; }
+  .lg-root.light-theme .lg-footer { background: rgba(235,247,245,0.68); }
+  .lg-root.light-theme .lg-footer-status { color: rgba(0,110,96,0.78); }
+  .lg-root.light-theme .lg-version { color: rgba(0,110,96,0.58) !important; }
+  .lg-root.light-theme .lg-ticker {
+    background: rgba(0,140,125,0.08);
+    border-color: rgba(0,140,125,0.2);
+  }
+  .lg-root.light-theme .lg-ticker-track { color: rgba(0,110,96,0.8); }
+  .lg-root.light-theme .t-up { color: #138441; }
+  .lg-root.light-theme .t-dn { color: #c33b3b; }
 `;
 
 const TICKERS = [
@@ -450,7 +516,7 @@ export default function Login({ onLogin, dark, toggleTheme }) {
   return (
     <>
       <style>{styles}</style>
-      <div className="lg-root">
+      <div className={`lg-root ${dark ? "dark-theme" : "light-theme"}`}>
 
         {/* VIDEO BACKDROP */}
         <div className="lg-video-bg">
@@ -518,7 +584,7 @@ export default function Login({ onLogin, dark, toggleTheme }) {
                 </label>
               )}
               {mode === "register" && (
-                <div style={{ margin: "0 0 12px", fontSize: 10, lineHeight: 1.5, color: "rgba(232,245,244,0.55)" }}>
+                <div className="lg-legal-notice" style={{ margin: "0 0 12px", fontSize: 10, lineHeight: 1.5, color: "rgba(232,245,244,0.55)" }}>
                   By creating an account, you agree to the{" "}
                   <button type="button" onClick={() => setLegalDocument("terms")}
                     style={{ border: "none", background: "none", color: "#00c9b1", padding: 0, fontSize: "inherit", textDecoration: "underline" }}>
@@ -531,7 +597,7 @@ export default function Login({ onLogin, dark, toggleTheme }) {
                   </button>.
                 </div>
               )}
-              <div style={{ margin: "0 0 12px", fontSize: 10, lineHeight: 1.5, color: "rgba(232,245,244,0.42)" }}>
+              <div className="lg-security-notice" style={{ margin: "0 0 12px", fontSize: 10, lineHeight: 1.5, color: "rgba(232,245,244,0.42)" }}>
                 Security notice: successful registrations and sign-ins are logged with the IP address and an approximate location,
                 and made visible to the QuantDesk administrator. Location can be inaccurate; records are retained for up to 30 days.
               </div>
@@ -548,11 +614,11 @@ export default function Login({ onLogin, dark, toggleTheme }) {
             <div className="lg-footer-status"><div className="status-dot" />Secured · bcrypt + JWT HS256</div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {toggleTheme && (
-                <button onClick={toggleTheme} style={{ background: "none", border: "none", fontSize: 15, cursor: "pointer", lineHeight: 1, padding: 0 }} title={dark ? "Light Mode" : "Dark Mode"}>
+                <button type="button" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"} onClick={toggleTheme} style={{ background: "none", border: "none", fontSize: 15, cursor: "pointer", lineHeight: 1, padding: 0 }} title={dark ? "Light Mode" : "Dark Mode"}>
                   {dark ? "☀️" : "🌙"}
                 </button>
               )}
-              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "rgba(0,201,177,0.3)", fontWeight: 400, letterSpacing: "0.06em" }}>v1.0.0</div>
+              <div className="lg-version" style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "rgba(0,201,177,0.3)", fontWeight: 400, letterSpacing: "0.06em" }}>v1.0.0</div>
             </div>
           </div>
         </div>

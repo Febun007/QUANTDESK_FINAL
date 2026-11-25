@@ -1598,6 +1598,8 @@ export default function Root() {
   return (
     <>
       <button
+        type="button"
+        aria-label={dark ? "Switch to Light Mode" : "Switch to Dark Mode"}
         onClick={toggleTheme}
         title={dark ? "Switch to Light Mode" : "Switch to Dark Mode"}
         style={{ position: "fixed", bottom: 20, right: 20, zIndex: 9999, width: 42, height: 42, borderRadius: "50%", background: dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", border: dark ? "1px solid rgba(255,255,255,0.20)" : "1px solid rgba(0,0,0,0.12)", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.15)", transition: "all 0.2s", lineHeight: 1 }}
