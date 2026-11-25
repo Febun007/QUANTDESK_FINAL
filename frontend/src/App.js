@@ -601,7 +601,7 @@ const SidebarSkeleton = () => (
 /* ─────────────────────────────────────────────────────────────────────────────
    SEARCH BAR
 ───────────────────────────────────────────────────────────────────────────── */
-const SearchBar = ({ onAdd }) => {
+const SearchBar = ({ onAdd, dark }) => {
   const [q, setQ] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -628,10 +628,10 @@ const SearchBar = ({ onAdd }) => {
         {searching && <div style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", width: 10, height: 10, border: "1.5px solid rgba(232,160,32,0.3)", borderTop: "1.5px solid var(--gold)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
       </div>
       {results.length > 0 && (
-        <div style={{ position: "absolute", top: "100%", left: 8, right: 8, background: "rgba(255,255,255,0.9)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.9)", borderRadius: 16, zIndex: 100, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.15)" }}>
+        <div style={{ position: "absolute", top: "100%", left: 8, right: 8, background: dark ? "rgba(17,26,46,0.98)" : "rgba(255,255,255,0.96)", backdropFilter: "blur(20px)", border: "1px solid var(--glass-border)", borderRadius: 16, zIndex: 100, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.15)" }}>
           {results.map(r => (
             <div key={r.symbol} onClick={() => { onAdd(r.symbol); setQ(""); setResults([]); }}
-              style={{ padding: "10px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(0,0,0,0.05)", transition: "background 0.15s" }}
+              style={{ padding: "10px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--glass-border)", color: "var(--text)", transition: "background 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.background = "rgba(232,160,32,0.08)"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
@@ -1383,7 +1383,7 @@ function App({ user, onLogout, dark, toggleTheme }) {
 
             {/* SIDEBAR */}
             <GlassPanel className="sidebar-panel">
-              <SearchBar onAdd={addToWatchlist} />
+              <SearchBar onAdd={addToWatchlist} dark={dark} />
               <div style={{ padding: "6px 16px 8px", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: "var(--text3)", textTransform: "uppercase", borderBottom: "1px solid var(--glass-border)" }}>
                 Watchlist · {watchlist.length}
               </div>
